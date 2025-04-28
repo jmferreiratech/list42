@@ -3,6 +3,8 @@
   "private": true,
   "version": "0.0.0",
   "type": "module",
+  "repository": "git@github.com:jmferreiratech/list42.git",
+  "author": "Marcelo Ferreira <marcelo@trincatech.com.br>",
   "scripts": {
     "dev": "vite",
     "build": "tsc -b && vite build",
