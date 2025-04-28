@@ -24,6 +24,9 @@ interface GroceryItem {
 const darkTheme = createTheme({
     palette: {
         mode: 'dark',
+        primary: {
+            main: '#42b883',
+        },
     },
 });
 
