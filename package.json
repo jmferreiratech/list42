@@ -5,11 +5,17 @@
   "type": "module",
   "repository": "git@github.com:jmferreiratech/list42.git",
   "author": "Marcelo Ferreira <marcelo@trincatech.com.br>",
+  "license": "MIT",
   "scripts": {
     "dev": "vite",
     "build": "tsc -b && vite build",
     "lint": "eslint .",
     "preview": "vite preview"
+  },
+  "engines": {
+    "node": "20.*",
+    "npm": "please-use-yarn",
+    "yarn": ">= 1.22"
   },
   "dependencies": {
     "react": "^19.0.0",
