@@ -23,6 +23,7 @@
     "@emotion/styled": "^11.14.0",
     "@mui/icons-material": "^7.0.2",
     "@mui/material": "^7.0.2",
+    "better-auth": "^1.2.7",
     "react": "^19.0.0",
     "react-dom": "^19.0.0"
   },

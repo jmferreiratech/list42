@@ -11,9 +11,18 @@ import {
     Checkbox,
     CssBaseline,
     Fab,
+    Box,
+    Paper,
+    Toolbar,
+    CircularProgress,
 } from '@mui/material';
+import MuiAppBar from '@mui/material/AppBar';
+import authClient from './auth';
+import LoginButton from './components/LoginButton';
 import DeleteIcon from '@mui/icons-material/Delete';
 import AddIcon from '@mui/icons-material/Add';
+import AppBar from "./components/AppBar.tsx";
+import logo from '/logo.svg?url';
 
 interface GroceryItem {
     id: number;
@@ -30,8 +39,94 @@ const darkTheme = createTheme({
     },
 });
 
-export default function App() {
-    const listName = 'Minha lista de compras';
+export default function AppWrapper() {
+    return (
+        <ThemeProvider theme={darkTheme}>
+            <CssBaseline/>
+            <App />
+        </ThemeProvider>
+    );
+}
+
+const listName = 'List42';
+
+function App() {
+    const {data, isPending} = authClient.useSession()
+
+    if (isPending) {
+        return (
+            <Container maxWidth="sm" sx={{ mt: 8, display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
+                <SignInAppBar listName={listName} />
+                <Box sx={{
+                    display: 'flex',
+                    flexDirection: 'column',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    minHeight: '50vh'
+                }}>
+                    <CircularProgress color="primary" />
+                    <Typography variant="body1" sx={{ mt: 2 }}>
+                        Loading...
+                    </Typography>
+                </Box>
+            </Container>
+        );
+    }
+
+    if (!data) {
+        return <SignIn/>;
+    }
+
+    return (
+        <Container maxWidth="sm" sx={{mt: 2, pb: 10}}>
+            <AppBar listName={listName} />
+            <GroceryList/>
+        </Container>
+    )
+}
+
+function SignInAppBar({listName}: {listName: string}) {
+    return (
+        <MuiAppBar position="fixed" sx={{ mb: 2 }}>
+            <Toolbar sx={{ display: 'flex', justifyContent: 'center' }}>
+                <Box sx={{ display: 'flex', alignItems: 'center' }}>
+                    <img src={logo} alt="Logo" style={{ height: 24, marginRight: 8 }} />
+                    <Typography variant="h6" component="h1" color="primary">
+                        {listName}
+                    </Typography>
+                </Box>
+            </Toolbar>
+        </MuiAppBar>
+    );
+}
+
+function SignIn() {
+    return (
+        <Container maxWidth="sm" sx={{ mt: 8, display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
+            <SignInAppBar listName={listName} />
+            <Paper
+                elevation={3}
+                sx={{
+                    p: 4,
+                    display: 'flex',
+                    flexDirection: 'column',
+                    alignItems: 'center',
+                    mt: 4
+                }}
+            >
+                <Typography component="h1" variant="h5" gutterBottom>
+                    Sign in to {listName}
+                </Typography>
+                <Typography variant="body1" sx={{ mb: 3, textAlign: 'center' }}>
+                    Please sign in to create and manage your grocery list.
+                </Typography>
+                <LoginButton />
+            </Paper>
+        </Container>
+    );
+}
+
+function GroceryList() {
     const [editingItemId, setEditingItemId] = useState<number | null>(null);
     const {
         items,
@@ -64,43 +159,39 @@ export default function App() {
     };
 
     return (
-        <ThemeProvider theme={darkTheme}>
-            <CssBaseline/>
-            <Container maxWidth="sm" sx={{mt: 4, pb: 10}}>
-                <Typography variant="h4" component="h1" gutterBottom align="center">{listName}</Typography>
-                <List>
-                    {items.map((item) => (
-                        editingItemId === item.id ? (
-                            <EditingItem
-                                key={item.id}
-                                item={item}
-                                onSave={handleSave}
-                                handleDeleteItem={handleDelete}
-                                handleToggleComplete={() => handleToggle(item.id, item.completed)}
-                            />
-                        ) : (
-                            <Item
-                                key={item.id}
-                                item={item}
-                                handleToggleComplete={() => handleToggle(item.id, item.completed)}
-                                handleDeleteItem={handleDelete}
-                                setEditingItemId={setEditingItemId}
-                            />
-                        )
-                    ))}
-                </List>
-                <Fab
-                    color="primary"
-                    aria-label="add"
-                    sx={{position: 'fixed', bottom: 32, right: 32}}
-                    onClick={handleAdd}
-                    disabled={editingItemId !== null && items.length > 0 && items[0].id === editingItemId && items[0].name.trim() === ''}
-                >
-                    <AddIcon/>
-                </Fab>
-            </Container>
-        </ThemeProvider>
-    );
+        <>
+            <List>
+                {items.map((item) => (
+                    editingItemId === item.id ? (
+                        <EditingItem
+                            key={item.id}
+                            item={item}
+                            onSave={handleSave}
+                            handleDeleteItem={handleDelete}
+                            handleToggleComplete={() => handleToggle(item.id, item.completed)}
+                        />
+                    ) : (
+                        <Item
+                            key={item.id}
+                            item={item}
+                            handleToggleComplete={() => handleToggle(item.id, item.completed)}
+                            handleDeleteItem={handleDelete}
+                            setEditingItemId={setEditingItemId}
+                        />
+                    )
+                ))}
+            </List>
+            <Fab
+                color="primary"
+                aria-label="add"
+                sx={{position: 'fixed', bottom: 32, right: 32}}
+                onClick={handleAdd}
+                disabled={editingItemId !== null && items.length > 0 && items[0].id === editingItemId && items[0].name.trim() === ''}
+            >
+                <AddIcon/>
+            </Fab>
+        </>
+    )
 }
 
 interface ItemProps {
@@ -147,8 +238,15 @@ function Item({ item, handleToggleComplete, handleDeleteItem, setEditingItemId }
 }
 
 function useItemsList() {
+    const {data} = authClient.useSession()
+
+    const userId = data?.user.id || 'anonymous';
+    const storageKey = `groceryListItems_${userId}`;
+
     const [items, setItems] = useState<GroceryItem[]>(() => {
-        const savedItems = localStorage.getItem('groceryListItems');
+        if (!data) return [];
+
+        const savedItems = localStorage.getItem(storageKey);
         if (savedItems) {
             try {
                 const parsedItems = JSON.parse(savedItems);
@@ -164,12 +262,14 @@ function useItemsList() {
     });
 
     useEffect(() => {
+        if (!data) return;
+
         try {
-            localStorage.setItem('groceryListItems', JSON.stringify(items));
+            localStorage.setItem(storageKey, JSON.stringify(items));
         } catch (error) {
             console.error("Failed to save items to localStorage", error);
         }
-    }, [items]);
+    }, [items, storageKey, data]);
 
     const addItem = (): number => {
         const newItemId = Date.now();
