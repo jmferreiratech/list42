@@ -1,20 +1,20 @@
-import {useState, useEffect} from 'react';
-import {ThemeProvider, createTheme} from '@mui/material/styles';
+import {useState} from 'react';
+import {createTheme, ThemeProvider} from '@mui/material/styles';
 import {
+    Box,
+    Checkbox,
+    CircularProgress,
     Container,
-    Typography,
-    TextField,
+    CssBaseline,
+    Fab,
+    IconButton,
     List,
     ListItem,
     ListItemText,
-    IconButton,
-    Checkbox,
-    CssBaseline,
-    Fab,
-    Box,
     Paper,
+    TextField,
     Toolbar,
-    CircularProgress,
+    Typography,
 } from '@mui/material';
 import MuiAppBar from '@mui/material/AppBar';
 import authClient from './auth';
@@ -22,13 +22,12 @@ import LoginButton from './components/LoginButton';
 import DeleteIcon from '@mui/icons-material/Delete';
 import AddIcon from '@mui/icons-material/Add';
 import AppBar from "./components/AppBar.tsx";
+import {createId} from '@paralleldrive/cuid2';
 import logo from '/logo.svg?url';
 
-interface GroceryItem {
-    id: number;
-    name: string;
-    completed: boolean;
-}
+import {GroceryItem, useGetGroceryListQuery, useUpdateGroceryListMutation,} from './api';
+import {store} from "./store.ts";
+import {Provider} from "react-redux";
 
 const darkTheme = createTheme({
     palette: {
@@ -43,7 +42,9 @@ export default function AppWrapper() {
     return (
         <ThemeProvider theme={darkTheme}>
             <CssBaseline/>
-            <App />
+            <Provider store={store}>
+                <App />
+            </Provider>
         </ThemeProvider>
     );
 }
@@ -127,7 +128,7 @@ function SignIn() {
 }
 
 function GroceryList() {
-    const [editingItemId, setEditingItemId] = useState<number | null>(null);
+    const [editingItemId, setEditingItemId] = useState<GroceryItem['id'] | null>(null);
     const {
         items,
         addItem,
@@ -135,14 +136,14 @@ function GroceryList() {
         deleteItem,
     } = useItemsList();
 
-    const handleDelete = (id: number) => {
+    const handleDelete = (id: GroceryItem['id']) => {
         deleteItem(id);
         if (editingItemId === id) {
             setEditingItemId(null);
         }
     };
 
-    const handleSave = (id: number, name: string) => {
+    const handleSave = (id: GroceryItem['id'], name: GroceryItem['name']) => {
         updateItem(id, { name });
         setEditingItemId(null);
     };
@@ -152,7 +153,7 @@ function GroceryList() {
         setEditingItemId(newId);
     };
 
-    const handleToggle = (id: number, completed: boolean) => {
+    const handleToggle = (id: GroceryItem['id'], completed: GroceryItem['completed']) => {
         updateItem(id, { completed: !completed });
         if (editingItemId === id)
             setEditingItemId(null);
@@ -196,9 +197,9 @@ function GroceryList() {
 
 interface ItemProps {
     item: GroceryItem;
-    handleToggleComplete: (id: number) => void;
-    handleDeleteItem: (id: number) => void;
-    setEditingItemId: (id: number) => void;
+    handleToggleComplete: (id: GroceryItem['id']) => void;
+    handleDeleteItem: (id: GroceryItem['id']) => void;
+    setEditingItemId: (id: GroceryItem['id']) => void;
 }
 
 function Item({ item, handleToggleComplete, handleDeleteItem, setEditingItemId }: ItemProps) {
@@ -238,61 +239,60 @@ function Item({ item, handleToggleComplete, handleDeleteItem, setEditingItemId }
 }
 
 function useItemsList() {
-    const {data} = authClient.useSession()
+    const { data: groceryListData, isLoading, isError } = useGetGroceryListQuery();
+    const [updateGroceryList, { isLoading: isUpdating }] = useUpdateGroceryListMutation();
+    const [tempItem, setTempItem] = useState<GroceryItem | null>(null);
 
-    const userId = data?.user.id || 'anonymous';
-    const storageKey = `groceryListItems_${userId}`;
+    const savedItems = groceryListData?.items || [];
 
-    const [items, setItems] = useState<GroceryItem[]>(() => {
-        if (!data) return [];
+    const items = tempItem ? [tempItem, ...savedItems] : savedItems;
 
-        const savedItems = localStorage.getItem(storageKey);
-        if (savedItems) {
-            try {
-                const parsedItems = JSON.parse(savedItems);
-                if (Array.isArray(parsedItems)) {
-                    return parsedItems as GroceryItem[];
-                }
-            } catch (error) {
-                console.error("Failed to parse items from localStorage", error);
-                return [];
-            }
-        }
-        return [];
-    });
-
-    useEffect(() => {
-        if (!data) return;
-
-        try {
-            localStorage.setItem(storageKey, JSON.stringify(items));
-        } catch (error) {
-            console.error("Failed to save items to localStorage", error);
-        }
-    }, [items, storageKey, data]);
-
-    const addItem = (): number => {
-        const newItemId = Date.now();
+    const addItem = (): GroceryItem['id'] => {
         const newItem: GroceryItem = {
-            id: newItemId,
+            id: 'new',
             name: '',
             completed: false,
         };
-        setItems((prevItems) => [newItem, ...prevItems]);
 
-        return newItemId;
+        setTempItem(newItem);
+
+        return newItem.id;
     };
 
-    const deleteItem = (id: number) => {
-        setItems((prevItems) => prevItems.filter((item) => item.id !== id));
+    const deleteItem = (id: GroceryItem['id']) => {
+        if (id === 'new' && tempItem) {
+            setTempItem(null);
+            return;
+        }
+
+        const updatedItems = savedItems.filter((item) => item.id !== id);
+        updateGroceryList({ items: updatedItems });
     };
 
-    const updateItem = (id: number, updates: Partial<Omit<GroceryItem, 'id'>>) => {
-        setItems(prevItems =>
-            prevItems.map(item =>
-                item.id === id ? { ...item, ...updates } : item
-            )
+    const updateItem = (id: GroceryItem['id'], updates: Partial<Omit<GroceryItem, 'id'>>) => {
+        if (id === 'new' && tempItem) {
+            const updatedTempItem = { ...tempItem, ...updates };
+
+            setTempItem(updatedTempItem);
+
+            if (updates.name !== undefined && updates.name.trim() !== '') {
+                const itemToSave = {
+                    ...updatedTempItem,
+                    id: createId()
+                };
+
+                const updatedItems = [itemToSave, ...savedItems];
+                updateGroceryList({ items: updatedItems });
+
+                setTempItem(null);
+            }
+            return;
+        }
+
+        const updatedItems = savedItems.map(item =>
+            item.id === id ? { ...item, ...updates } : item
         );
+        updateGroceryList({ items: updatedItems });
     };
 
     return {
@@ -300,14 +300,17 @@ function useItemsList() {
         addItem,
         updateItem,
         deleteItem,
+        isLoading,
+        isUpdating,
+        isError,
     };
 }
 
 interface EditingItemProps {
     item: GroceryItem;
-    onSave: (id: number, name: string) => void;
-    handleDeleteItem: (id: number) => void;
-    handleToggleComplete: (id: number) => void;
+    onSave: (id: GroceryItem['id'], name: GroceryItem['name']) => void;
+    handleDeleteItem: (id: GroceryItem['id']) => void;
+    handleToggleComplete: (id: GroceryItem['id']) => void;
 }
 
 function EditingItem({
