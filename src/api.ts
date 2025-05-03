@@ -5,6 +5,7 @@ export interface GroceryItem {
     id: string;
     name: string;
     completed: boolean;
+    updatedAt?: string | null;
 }
 
 interface GroceryList {
@@ -40,7 +41,7 @@ export const groceryApi = createApi({
                 const patchResult = dispatch(
                     groceryApi.util.updateQueryData('getGroceryList', {id}, (draft) => {
                         if (draft) {
-                            draft.items.push(item);
+                            draft.items.push({...item, updatedAt: new Date().toISOString()});
                         }
                     })
                 );
@@ -68,7 +69,7 @@ export const groceryApi = createApi({
                         if (draft) {
                             const index = draft.items.findIndex(i => i.id === item.id);
                             if (index !== -1) {
-                                draft.items[index] = item;
+                                draft.items[index] = {...item, updatedAt: new Date().toISOString()};
                             }
                         }
                     })

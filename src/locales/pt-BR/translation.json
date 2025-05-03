@@ -14,5 +14,8 @@
   "selectList": "Selecionar Lista",
   "sharedList": "Lista Compartilhada {{id}}",
   "enterItemName": "Digite o nome do item...",
-  "addItem": "Adicionar item"
+  "addItem": "Adicionar item",
+  "pending": "Pendentes",
+  "completed": "Pronto",
+  "swipeToNavigate": "Deslize para navegar entre as abas"
 }

@@ -1,25 +1,36 @@
-import {AppBar as MuiAppBar, Button, Slide, Snackbar, Toolbar, Typography, useScrollTrigger} from "@mui/material";
+import {AppBar as MuiAppBar, Box, IconButton, Slide, Snackbar, Toolbar, useScrollTrigger} from "@mui/material";
 import ShareIcon from '@mui/icons-material/Share';
 import {useState} from "react";
 import {useTranslation} from 'react-i18next';
 import api from "../api";
 import UserMenu from "./UserMenu.tsx";
+import ListSelector from "./ListSelector.tsx";
+import logo from '/logo.svg?url';
 
-export default function AppBar() {
+export default function AppBar({ selectedListId, onListChange }: {
+  selectedListId: string,
+  onListChange: (id: string) => void
+}) {
     const { t } = useTranslation();
 
     return (
         <>
         <HideOnScroll>
             <MuiAppBar position="fixed" sx={{ mb: 2 }}>
-                <Toolbar sx={{ display: 'flex', justifyContent: 'space-between' }}>
-                    <Typography variant="h6" component="h1" color="primary">
-                        {t('appName')}
-                    </Typography>
-                    <div style={{ display: 'flex', alignItems: 'center' }}>
-                        <ShareButton />
+                <Toolbar sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                    <Box component="img"
+                         src={logo}
+                         alt={t('appName')}
+                         sx={{ height: 32, width: 'auto' }} />
+
+                    <Box sx={{ flexGrow: 1, mx: 2 }}>
+                        <ListSelector value={selectedListId} onChange={onListChange} />
+                    </Box>
+
+                    <Box sx={{ display: 'flex', alignItems: 'center' }}>
+                        <ShareButton disabled={selectedListId !== 'mine'} />
                         <UserMenu />
-                    </div>
+                    </Box>
                 </Toolbar>
             </MuiAppBar>
         </HideOnScroll>
@@ -40,7 +51,7 @@ function HideOnScroll(props: {children: React.ReactElement}) {
     );
 }
 
-function ShareButton() {
+function ShareButton({ disabled = false }: { disabled?: boolean }) {
     const { t } = useTranslation();
     const [snackbarOpen, setSnackbarOpen] = useState(false);
     const [snackbarMessage, setSnackbarMessage] = useState('');
@@ -93,14 +104,14 @@ function ShareButton() {
 
     return (
         <>
-            <Button
+            <IconButton
                 color="primary"
-                startIcon={<ShareIcon />}
                 onClick={handleShare}
-                sx={{ mr: 2 }}
+                aria-label={t('share')}
+                disabled={disabled}
             >
-                {t('share')}
-            </Button>
+                <ShareIcon />
+            </IconButton>
             <Snackbar
                 open={snackbarOpen}
                 autoHideDuration={6000}
