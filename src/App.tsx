@@ -245,7 +245,9 @@ function Item({ item, handleToggleComplete, handleDeleteItem, setEditingItemId }
 
 function useItemsList(listId: string = 'mine') {
     const { data: groceryListData, isLoading, isError } = api.endpoints.getGroceryList.useQuery({ id: listId });
-    const [updateGroceryList, { isLoading: isUpdating }] = api.endpoints.updateGroceryList.useMutation();
+    const [addGroceryListItem, { isLoading: isAdding }] = api.endpoints.addItem.useMutation();
+    const [updateGroceryListItem, { isLoading: isUpdating }] = api.endpoints.updateItem.useMutation();
+    const [deleteGroceryListItem, { isLoading: isDeleting }] = api.endpoints.deleteItem.useMutation();
     const [tempItem, setTempItem] = useState<GroceryItem | null>(null);
 
     const savedItems = groceryListData?.items || [];
@@ -270,8 +272,10 @@ function useItemsList(listId: string = 'mine') {
             return;
         }
 
-        const updatedItems = savedItems.filter((item) => item.id !== id);
-        updateGroceryList({ id: listId, items: updatedItems });
+        const itemToDelete = savedItems.find(item => item.id === id);
+        if (itemToDelete) {
+            deleteGroceryListItem({ id: listId, item: itemToDelete });
+        }
     };
 
     const updateItem = (id: GroceryItem['id'], updates: Partial<Omit<GroceryItem, 'id'>>) => {
@@ -286,18 +290,17 @@ function useItemsList(listId: string = 'mine') {
                     id: createId()
                 };
 
-                const updatedItems = [itemToSave, ...savedItems];
-                updateGroceryList({ id: listId, items: updatedItems });
-
+                addGroceryListItem({ id: listId, item: itemToSave });
                 setTempItem(null);
             }
             return;
         }
 
-        const updatedItems = savedItems.map(item =>
-            item.id === id ? { ...item, ...updates } : item
-        );
-        updateGroceryList({ id: listId, items: updatedItems });
+        const existingItem = savedItems.find(item => item.id === id);
+        if (existingItem) {
+            const updatedItem = { ...existingItem, ...updates };
+            updateGroceryListItem({ id: listId, item: updatedItem });
+        }
     };
 
     return {
@@ -306,7 +309,7 @@ function useItemsList(listId: string = 'mine') {
         updateItem,
         deleteItem,
         isLoading,
-        isUpdating,
+        isUpdating: isAdding || isUpdating || isDeleting,
         isError,
     };
 }

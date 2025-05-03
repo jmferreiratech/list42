@@ -30,22 +30,81 @@ export const groceryApi = createApi({
             query: ({id = 'mine'}) => `/${id}`,
             providesTags: ['GroceryList'],
         }),
-        updateGroceryList: builder.mutation<GroceryList, { id?: GroceryList['id'], items: GroceryItem[] }>({
-            query: ({id = 'mine', items}) => ({
-                url: `/${id}`,
-                method: 'PUT',
-                body: {items},
+        addItem: builder.mutation<GroceryList, { id?: GroceryList['id'], item: GroceryItem }>({
+            query: ({id = 'mine', item}) => ({
+                url: `/${id}/items`,
+                method: 'POST',
+                body: item,
             }),
-            async onQueryStarted({ id, items }, { dispatch, queryFulfilled }) {
+            async onQueryStarted({ id, item }, { dispatch, queryFulfilled }) {
                 const patchResult = dispatch(
                     groceryApi.util.updateQueryData('getGroceryList', {id}, (draft) => {
                         if (draft) {
-                            draft.items = items;
+                            draft.items.push(item);
                         }
                     })
                 );
                 try {
-                    await queryFulfilled;
+                    const { data } =await queryFulfilled;
+                    dispatch(
+                        groceryApi.util.updateQueryData('getGroceryList', {id}, (draft) => {
+                            Object.assign(draft, data)
+                        }),
+                    )
+                } catch {
+                    patchResult.undo();
+                }
+            },
+        }),
+        updateItem: builder.mutation<GroceryList, { id?: GroceryList['id'], item: GroceryItem }>({
+            query: ({id = 'mine', item}) => ({
+                url: `/${id}/items/${item.id}`,
+                method: 'PUT',
+                body: item,
+            }),
+            async onQueryStarted({ id, item }, { dispatch, queryFulfilled }) {
+                const patchResult = dispatch(
+                    groceryApi.util.updateQueryData('getGroceryList', {id}, (draft) => {
+                        if (draft) {
+                            const index = draft.items.findIndex(i => i.id === item.id);
+                            if (index !== -1) {
+                                draft.items[index] = item;
+                            }
+                        }
+                    })
+                );
+                try {
+                    const { data } = await queryFulfilled;
+                    dispatch(
+                        groceryApi.util.updateQueryData('getGroceryList', {id}, (draft) => {
+                            Object.assign(draft, data)
+                        }),
+                    )
+                } catch {
+                    patchResult.undo();
+                }
+            },
+        }),
+        deleteItem: builder.mutation<GroceryList, { id?: GroceryList['id'], item: GroceryItem }>({
+            query: ({id = 'mine', item}) => ({
+                url: `/${id}/items/${item.id}`,
+                method: 'DELETE',
+            }),
+            async onQueryStarted({ id, item }, { dispatch, queryFulfilled }) {
+                const patchResult = dispatch(
+                    groceryApi.util.updateQueryData('getGroceryList', {id}, (draft) => {
+                        if (draft) {
+                            draft.items = draft.items.filter(i => i.id !== item.id);
+                        }
+                    })
+                );
+                try {
+                    const { data } = await queryFulfilled;
+                    dispatch(
+                        groceryApi.util.updateQueryData('getGroceryList', {id}, (draft) => {
+                            Object.assign(draft, data)
+                        }),
+                    )
                 } catch {
                     patchResult.undo();
                 }
