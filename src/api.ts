@@ -20,21 +20,25 @@ export const groceryApi = createApi({
         baseUrl: `${settings.baseURL}/lists/`,
         credentials: 'include',
     }),
-    tagTypes: ['GroceryList'],
+    tagTypes: ['GroceryList', 'GroceryLists'],
     endpoints: (builder) => ({
-        getGroceryList: builder.query<GroceryList, void>({
-            query: () => '/mine',
+        listGroceryLists: builder.query<{id: string; name: string}[], void>({
+            query: () => '/',
+            providesTags: ['GroceryLists'],
+        }),
+        getGroceryList: builder.query<GroceryList, { id?: GroceryList['id'] }>({
+            query: ({id = 'mine'}) => `/${id}`,
             providesTags: ['GroceryList'],
         }),
-        updateGroceryList: builder.mutation<GroceryList, { items: GroceryItem[] }>({
-            query: ({items}: {items: GroceryItem[]}) => ({
-                url: '/mine',
+        updateGroceryList: builder.mutation<GroceryList, { id?: GroceryList['id'], items: GroceryItem[] }>({
+            query: ({id = 'mine', items}) => ({
+                url: `/${id}`,
                 method: 'PUT',
                 body: {items},
             }),
-            async onQueryStarted({ items }, { dispatch, queryFulfilled }) {
+            async onQueryStarted({ id, items }, { dispatch, queryFulfilled }) {
                 const patchResult = dispatch(
-                    groceryApi.util.updateQueryData('getGroceryList', undefined, (draft) => {
+                    groceryApi.util.updateQueryData('getGroceryList', {id}, (draft) => {
                         if (draft) {
                             draft.items = items;
                         }
@@ -47,10 +51,18 @@ export const groceryApi = createApi({
                 }
             },
         }),
+        getShareCode: builder.query<string, void>({
+            query: () => '/mine/share-code',
+        }),
+        redeemShareCode: builder.mutation<GroceryList, { shareCode: string }>({
+            query: ({shareCode}) => ({
+                url: '/',
+                method: 'POST',
+                params: {shared: shareCode},
+            }),
+            invalidatesTags: ['GroceryLists'],
+        }),
     }),
 });
 
-export const {
-    useGetGroceryListQuery,
-    useUpdateGroceryListMutation,
-} = groceryApi;
+export default groceryApi;

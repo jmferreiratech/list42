@@ -1,9 +1,8 @@
-import {useState} from 'react';
+import {useState, useEffect} from 'react';
+import {FormControl, InputLabel, MenuItem, Select, SelectChangeEvent} from '@mui/material';
 import {createTheme, ThemeProvider} from '@mui/material/styles';
 import {
-    Box,
     Checkbox,
-    CircularProgress,
     Container,
     CssBaseline,
     Fab,
@@ -11,23 +10,19 @@ import {
     List,
     ListItem,
     ListItemText,
-    Paper,
     TextField,
-    Toolbar,
-    Typography,
 } from '@mui/material';
-import MuiAppBar from '@mui/material/AppBar';
 import authClient from './auth';
-import LoginButton from './components/LoginButton';
 import DeleteIcon from '@mui/icons-material/Delete';
 import AddIcon from '@mui/icons-material/Add';
 import AppBar from "./components/AppBar.tsx";
 import {createId} from '@paralleldrive/cuid2';
-import logo from '/logo.svg?url';
 
-import {GroceryItem, useGetGroceryListQuery, useUpdateGroceryListMutation,} from './api';
+import api, {GroceryItem} from './api';
 import {store} from "./store.ts";
 import {Provider} from "react-redux";
+import Loading from "./components/Loading.tsx";
+import SignIn from "./components/SignIn.tsx";
 
 const darkTheme = createTheme({
     palette: {
@@ -52,89 +47,92 @@ export default function AppWrapper() {
 const listName = 'List42';
 
 function App() {
-    const {data, isPending} = authClient.useSession()
+    const {data, isPending} = authClient.useSession();
+    const [selectedListId, setSelectedListId] = useState<string>('mine');
 
     if (isPending) {
-        return (
-            <Container maxWidth="sm" sx={{ mt: 8, display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
-                <SignInAppBar listName={listName} />
-                <Box sx={{
-                    display: 'flex',
-                    flexDirection: 'column',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    minHeight: '50vh'
-                }}>
-                    <CircularProgress color="primary" />
-                    <Typography variant="body1" sx={{ mt: 2 }}>
-                        Loading...
-                    </Typography>
-                </Box>
-            </Container>
-        );
+        return <Loading listName={listName} />;
     }
 
     if (!data) {
-        return <SignIn/>;
+        return <SignIn listName={listName} />;
     }
 
     return (
         <Container maxWidth="sm" sx={{mt: 2, pb: 10}}>
+            <ShareCodeRedeemer onListRedeemed={setSelectedListId} />
             <AppBar listName={listName} />
-            <GroceryList/>
+            <ListSelector value={selectedListId} onChange={setSelectedListId} />
+            <GroceryList listId={selectedListId} />
         </Container>
     )
 }
 
-function SignInAppBar({listName}: {listName: string}) {
-    return (
-        <MuiAppBar position="fixed" sx={{ mb: 2 }}>
-            <Toolbar sx={{ display: 'flex', justifyContent: 'center' }}>
-                <Box sx={{ display: 'flex', alignItems: 'center' }}>
-                    <img src={logo} alt="Logo" style={{ height: 24, marginRight: 8 }} />
-                    <Typography variant="h6" component="h1" color="primary">
-                        {listName}
-                    </Typography>
-                </Box>
-            </Toolbar>
-        </MuiAppBar>
-    );
-}
+function ListSelector({ value, onChange }: { value: string, onChange: (id: string) => void }) {
+    const { data: lists = [], isLoading } = api.endpoints.listGroceryLists.useQuery();
 
-function SignIn() {
+    const handleChange = (event: SelectChangeEvent) => {
+        onChange(event.target.value);
+    };
+
+    if (isLoading || lists.length <= 1) {
+        return null;
+    }
+
     return (
-        <Container maxWidth="sm" sx={{ mt: 8, display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
-            <SignInAppBar listName={listName} />
-            <Paper
-                elevation={3}
-                sx={{
-                    p: 4,
-                    display: 'flex',
-                    flexDirection: 'column',
-                    alignItems: 'center',
-                    mt: 4
-                }}
+        <FormControl fullWidth sx={{ mb: 2 }}>
+            <InputLabel id="list-selector-label">Select List</InputLabel>
+            <Select
+                labelId="list-selector-label"
+                id="list-selector"
+                value={value}
+                label="Select List"
+                onChange={handleChange}
             >
-                <Typography component="h1" variant="h5" gutterBottom>
-                    Sign in to {listName}
-                </Typography>
-                <Typography variant="body1" sx={{ mb: 3, textAlign: 'center' }}>
-                    Please sign in to create and manage your grocery list.
-                </Typography>
-                <LoginButton />
-            </Paper>
-        </Container>
+                {lists.map((list) => (
+                    <MenuItem key={list.id} value={list.id}>
+                        {list.name || `Shared List ${list.id.substring(0, 6)}`}
+                    </MenuItem>
+                ))}
+            </Select>
+        </FormControl>
     );
 }
 
-function GroceryList() {
+function ShareCodeRedeemer({ onListRedeemed }: { onListRedeemed: (id: string) => void }) {
+    const [redeemShareCode] = api.endpoints.redeemShareCode.useMutation();
+
+    useEffect(() => {
+        const url = new URL(window.location.href);
+        const shareCode = url.searchParams.get('shared');
+
+        if (shareCode) {
+            redeemShareCode({ shareCode })
+                .unwrap()
+                .then((response) => {
+                    url.searchParams.delete('shared');
+                    window.history.replaceState({}, document.title, url.toString());
+                    if (response && response.id) {
+                        onListRedeemed(response.id);
+                    }
+                })
+                .catch(error => {
+                    console.error('Error redeeming share code:', error);
+                });
+        }
+    }, [redeemShareCode, onListRedeemed]);
+
+    return null;
+}
+
+function GroceryList({ listId = 'mine' }: { listId?: string }) {
     const [editingItemId, setEditingItemId] = useState<GroceryItem['id'] | null>(null);
     const {
         items,
         addItem,
         updateItem,
         deleteItem,
-    } = useItemsList();
+    } = useItemsList(listId);
 
     const handleDelete = (id: GroceryItem['id']) => {
         deleteItem(id);
@@ -238,9 +236,9 @@ function Item({ item, handleToggleComplete, handleDeleteItem, setEditingItemId }
     );
 }
 
-function useItemsList() {
-    const { data: groceryListData, isLoading, isError } = useGetGroceryListQuery();
-    const [updateGroceryList, { isLoading: isUpdating }] = useUpdateGroceryListMutation();
+function useItemsList(listId: string = 'mine') {
+    const { data: groceryListData, isLoading, isError } = api.endpoints.getGroceryList.useQuery({ id: listId });
+    const [updateGroceryList, { isLoading: isUpdating }] = api.endpoints.updateGroceryList.useMutation();
     const [tempItem, setTempItem] = useState<GroceryItem | null>(null);
 
     const savedItems = groceryListData?.items || [];
@@ -266,7 +264,7 @@ function useItemsList() {
         }
 
         const updatedItems = savedItems.filter((item) => item.id !== id);
-        updateGroceryList({ items: updatedItems });
+        updateGroceryList({ id: listId, items: updatedItems });
     };
 
     const updateItem = (id: GroceryItem['id'], updates: Partial<Omit<GroceryItem, 'id'>>) => {
@@ -282,7 +280,7 @@ function useItemsList() {
                 };
 
                 const updatedItems = [itemToSave, ...savedItems];
-                updateGroceryList({ items: updatedItems });
+                updateGroceryList({ id: listId, items: updatedItems });
 
                 setTempItem(null);
             }
@@ -292,7 +290,7 @@ function useItemsList() {
         const updatedItems = savedItems.map(item =>
             item.id === id ? { ...item, ...updates } : item
         );
-        updateGroceryList({ items: updatedItems });
+        updateGroceryList({ id: listId, items: updatedItems });
     };
 
     return {
