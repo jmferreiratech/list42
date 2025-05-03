@@ -1,17 +1,22 @@
-import {useState, useEffect} from 'react';
-import {FormControl, InputLabel, MenuItem, Select, SelectChangeEvent} from '@mui/material';
-import {createTheme, ThemeProvider} from '@mui/material/styles';
+import {useEffect, useState} from 'react';
 import {
     Checkbox,
     Container,
     CssBaseline,
     Fab,
+    FormControl,
     IconButton,
+    InputLabel,
     List,
     ListItem,
     ListItemText,
-    TextField,
+    MenuItem,
+    Select,
+    SelectChangeEvent,
+    TextField
 } from '@mui/material';
+import {createTheme, ThemeProvider} from '@mui/material/styles';
+import {useTranslation} from 'react-i18next';
 import authClient from './auth';
 import DeleteIcon from '@mui/icons-material/Delete';
 import AddIcon from '@mui/icons-material/Add';
@@ -44,24 +49,23 @@ export default function AppWrapper() {
     );
 }
 
-const listName = 'List42';
 
 function App() {
     const {data, isPending} = authClient.useSession();
     const [selectedListId, setSelectedListId] = useState<string>('mine');
 
     if (isPending) {
-        return <Loading listName={listName} />;
+        return <Loading />;
     }
 
     if (!data) {
-        return <SignIn listName={listName} />;
+        return <SignIn />;
     }
 
     return (
         <Container maxWidth="sm" sx={{mt: 2, pb: 10}}>
             <ShareCodeRedeemer onListRedeemed={setSelectedListId} />
-            <AppBar listName={listName} />
+            <AppBar />
             <ListSelector value={selectedListId} onChange={setSelectedListId} />
             <GroceryList listId={selectedListId} />
         </Container>
@@ -69,6 +73,7 @@ function App() {
 }
 
 function ListSelector({ value, onChange }: { value: string, onChange: (id: string) => void }) {
+    const { t } = useTranslation();
     const { data: lists = [], isLoading } = api.endpoints.listGroceryLists.useQuery();
 
     const handleChange = (event: SelectChangeEvent) => {
@@ -81,17 +86,17 @@ function ListSelector({ value, onChange }: { value: string, onChange: (id: strin
 
     return (
         <FormControl fullWidth sx={{ mb: 2 }}>
-            <InputLabel id="list-selector-label">Select List</InputLabel>
+            <InputLabel id="list-selector-label">{t('selectList')}</InputLabel>
             <Select
                 labelId="list-selector-label"
                 id="list-selector"
                 value={value}
-                label="Select List"
+                label={t('selectList')}
                 onChange={handleChange}
             >
                 {lists.map((list) => (
                     <MenuItem key={list.id} value={list.id}>
-                        {list.name || `Shared List ${list.id.substring(0, 6)}`}
+                        {list.name || t('sharedList', { id: list.id.substring(0, 6) })}
                     </MenuItem>
                 ))}
             </Select>
@@ -126,6 +131,7 @@ function ShareCodeRedeemer({ onListRedeemed }: { onListRedeemed: (id: string) =>
 }
 
 function GroceryList({ listId = 'mine' }: { listId?: string }) {
+    const { t } = useTranslation();
     const [editingItemId, setEditingItemId] = useState<GroceryItem['id'] | null>(null);
     const {
         items,
@@ -182,7 +188,7 @@ function GroceryList({ listId = 'mine' }: { listId?: string }) {
             </List>
             <Fab
                 color="primary"
-                aria-label="add"
+                aria-label={t('addItem')}
                 sx={{position: 'fixed', bottom: 32, right: 32}}
                 onClick={handleAdd}
                 disabled={editingItemId !== null && items.length > 0 && items[0].id === editingItemId && items[0].name.trim() === ''}
@@ -201,6 +207,7 @@ interface ItemProps {
 }
 
 function Item({ item, handleToggleComplete, handleDeleteItem, setEditingItemId }: ItemProps) {
+    const { t } = useTranslation();
     return (
         <ListItem
             secondaryAction={
@@ -224,7 +231,7 @@ function Item({ item, handleToggleComplete, handleDeleteItem, setEditingItemId }
             />
             <ListItemText
                 id={`list-item-label-${item.id}`}
-                primary={item.name || <span style={{ fontStyle: 'italic', opacity: 0.6 }}>Enter item name...</span>}
+                primary={item.name || <span style={{ fontStyle: 'italic', opacity: 0.6 }}>{t('enterItemName')}</span>}
                 sx={{
                     textDecoration: item.completed ? 'line-through' : 'none',
                     color: item.completed ? 'text.secondary' : 'text.primary',

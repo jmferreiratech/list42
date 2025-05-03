@@ -1,10 +1,47 @@
-import { Button, Slide, Snackbar, Toolbar, Typography, useScrollTrigger, AppBar as MuiAppBar } from "@mui/material";
+import {AppBar as MuiAppBar, Button, Slide, Snackbar, Toolbar, Typography, useScrollTrigger} from "@mui/material";
 import ShareIcon from '@mui/icons-material/Share';
-import { useState } from "react";
+import {useState} from "react";
+import {useTranslation} from 'react-i18next';
 import api from "../api";
 import UserMenu from "./UserMenu.tsx";
 
-export default function AppBar({listName}: {listName: string}) {
+export default function AppBar() {
+    const { t } = useTranslation();
+
+    return (
+        <>
+        <HideOnScroll>
+            <MuiAppBar position="fixed" sx={{ mb: 2 }}>
+                <Toolbar sx={{ display: 'flex', justifyContent: 'space-between' }}>
+                    <Typography variant="h6" component="h1" color="primary">
+                        {t('appName')}
+                    </Typography>
+                    <div style={{ display: 'flex', alignItems: 'center' }}>
+                        <ShareButton />
+                        <UserMenu />
+                    </div>
+                </Toolbar>
+            </MuiAppBar>
+        </HideOnScroll>
+        <Toolbar /> {/* This empty Toolbar acts as a spacer */}
+        </>
+    )
+};
+
+function HideOnScroll(props: {children: React.ReactElement}) {
+    const { children } = props;
+
+    const trigger = useScrollTrigger();
+
+    return (
+        <Slide appear={false} direction="down" in={!trigger}>
+            {children}
+        </Slide>
+    );
+}
+
+function ShareButton() {
+    const { t } = useTranslation();
     const [snackbarOpen, setSnackbarOpen] = useState(false);
     const [snackbarMessage, setSnackbarMessage] = useState('');
     const [trigger] = api.endpoints.getShareCode.useLazyQuery();
@@ -13,7 +50,7 @@ export default function AppBar({listName}: {listName: string}) {
         const shareCode = await trigger().unwrap();
 
         if (!shareCode) {
-            setSnackbarMessage('Unable to get share code');
+            setSnackbarMessage(t('shareCodeError'));
             setSnackbarOpen(true);
             return;
         }
@@ -23,8 +60,8 @@ export default function AppBar({listName}: {listName: string}) {
         if (navigator.share) {
             try {
                 await navigator.share({
-                    title: 'Acesse Minha Lista',
-                    text: `Quero compartilhar minha lista com você. Use o link para acessar.`,
+                    title: t('shareTitle'),
+                    text: t('shareMessage'),
                     url: link
                 });
             } catch (error) {
@@ -39,12 +76,12 @@ export default function AppBar({listName}: {listName: string}) {
     const copyToClipboard = (link: string) => {
         navigator.clipboard.writeText(link)
             .then(() => {
-                setSnackbarMessage('Share link copied to clipboard!');
+                setSnackbarMessage(t('shareLink'));
                 setSnackbarOpen(true);
             })
             .catch(err => {
                 console.error('Failed to copy:', err);
-                setSnackbarMessage('Failed to copy share link');
+                setSnackbarMessage(t('shareError'));
                 setSnackbarOpen(true);
             });
     };
@@ -53,51 +90,23 @@ export default function AppBar({listName}: {listName: string}) {
         setSnackbarOpen(false);
     };
 
+
     return (
         <>
-        <HideOnScroll>
-            <MuiAppBar position="fixed" sx={{ mb: 2 }}>
-                <Toolbar sx={{ display: 'flex', justifyContent: 'space-between' }}>
-                    <Typography variant="h6" component="h1" color="primary">
-                        {listName}
-                    </Typography>
-                    <div style={{ display: 'flex', alignItems: 'center' }}>
-                        <Button
-                            color="primary"
-                            startIcon={<ShareIcon />}
-                            onClick={handleShare}
-                            sx={{ mr: 2 }}
-                        >
-                            Share
-                        </Button>
-                        <UserMenu />
-                    </div>
-                </Toolbar>
-            </MuiAppBar>
-        </HideOnScroll>
-        <Toolbar /> {/* This empty Toolbar acts as a spacer */}
-        <Snackbar
-            open={snackbarOpen}
-            autoHideDuration={6000}
-            onClose={handleCloseSnackbar}
-            message={snackbarMessage}
-        />
+            <Button
+                color="primary"
+                startIcon={<ShareIcon />}
+                onClick={handleShare}
+                sx={{ mr: 2 }}
+            >
+                {t('share')}
+            </Button>
+            <Snackbar
+                open={snackbarOpen}
+                autoHideDuration={6000}
+                onClose={handleCloseSnackbar}
+                message={snackbarMessage}
+            />
         </>
-    )
-};
-
-interface HideOnScrollProps {
-    children: React.ReactElement;
-}
-
-function HideOnScroll(props: HideOnScrollProps) {
-    const { children } = props;
-
-    const trigger = useScrollTrigger();
-
-    return (
-        <Slide appear={false} direction="down" in={!trigger}>
-            {children}
-        </Slide>
     );
 }

@@ -1,0 +1,18 @@
+{
+  "appName": "List42",
+  "share": "Compartilhar",
+  "shareLink": "Link de compartilhamento copiado para a área de transferência!",
+  "shareError": "Falha ao copiar link de compartilhamento",
+  "shareCodeError": "Não foi possível obter o código de compartilhamento",
+  "shareMessage": "Quero compartilhar minha lista com você. Use este link para acessar.",
+  "shareTitle": "Acesse Minha Lista",
+  "loading": "Carregando...",
+  "signIn": "Entre no {{appName}}",
+  "signInMessage": "Por favor, faça login para criar e gerenciar sua lista de compras.",
+  "signInWithGoogle": "Entrar com Google",
+  "logout": "Sair",
+  "selectList": "Selecionar Lista",
+  "sharedList": "Lista Compartilhada {{id}}",
+  "enterItemName": "Digite o nome do item...",
+  "addItem": "Adicionar item"
+}

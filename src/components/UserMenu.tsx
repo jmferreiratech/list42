@@ -1,10 +1,10 @@
 import { useState } from 'react';
 import { Button, Menu, MenuItem, Avatar, Typography, Box } from '@mui/material';
+import { useTranslation } from 'react-i18next';
 import authClient from '../auth.ts';
 
-// type Session = authClient.$Infer.Session;
-
 export default function UserMenu() {
+    const { t } = useTranslation();
     const [anchorEl, setAnchorEl] = useState<null | HTMLElement>(null);
     const {data, isPending} = authClient.useSession()
 
@@ -59,7 +59,7 @@ export default function UserMenu() {
                     <Typography variant="subtitle1">{user.name || 'User'}</Typography>
                     <Typography variant="body2" color="text.secondary">{user.email}</Typography>
                 </Box>
-                <MenuItem onClick={handleLogout}>Logout</MenuItem>
+                <MenuItem onClick={handleLogout}>{t('logout')}</MenuItem>
             </Menu>
         </>
     );

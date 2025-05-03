@@ -26,12 +26,15 @@
     "@paralleldrive/cuid2": "^2.2.2",
     "@reduxjs/toolkit": "^2.7.0",
     "better-auth": "^1.2.7",
+    "i18next": "^25.0.2",
     "react": "^19.0.0",
     "react-dom": "^19.0.0",
+    "react-i18next": "^15.5.1",
     "react-redux": "^9.2.0"
   },
   "devDependencies": {
     "@eslint/js": "^9.22.0",
+    "@types/node": "^22.15.3",
     "@types/react": "^19.0.10",
     "@types/react-dom": "^19.0.4",
     "@vite-pwa/assets-generator": "^1.0.0",
