@@ -1,10 +1,10 @@
-import {AppBar as MuiAppBar, Box, IconButton, Slide, Snackbar, Toolbar, useScrollTrigger} from "@mui/material";
+import {AppBar as MuiAppBar, Box, IconButton, Slide, Toolbar, useScrollTrigger} from "@mui/material";
 import ShareIcon from '@mui/icons-material/Share';
-import {useState} from "react";
 import {useTranslation} from 'react-i18next';
 import api from "../api";
 import UserMenu from "./UserMenu.tsx";
 import ListSelector from "./ListSelector.tsx";
+import { useToast } from './Toast.tsx';
 import logo from '/logo.svg?url';
 
 export default function AppBar({ selectedListId, onListChange }: {
@@ -53,16 +53,21 @@ function HideOnScroll(props: {children: React.ReactElement}) {
 
 function ShareButton({ disabled = false }: { disabled?: boolean }) {
     const { t } = useTranslation();
-    const [snackbarOpen, setSnackbarOpen] = useState(false);
-    const [snackbarMessage, setSnackbarMessage] = useState('');
+    const { showToast } = useToast();
     const [trigger] = api.endpoints.getShareCode.useLazyQuery();
 
     const handleShare = async () => {
-        const shareCode = await trigger().unwrap();
+        let shareCode: string | null = null;
+        try {
+            shareCode = await trigger().unwrap();
+        } catch (error) {
+            console.error('Failed to get share code:', error);
+            showToast('shareCodeError', 'error');
+            return;
+        }
 
         if (!shareCode) {
-            setSnackbarMessage(t('shareCodeError'));
-            setSnackbarOpen(true);
+            showToast('shareCodeError', 'error');
             return;
         }
 
@@ -87,37 +92,22 @@ function ShareButton({ disabled = false }: { disabled?: boolean }) {
     const copyToClipboard = (link: string) => {
         navigator.clipboard.writeText(link)
             .then(() => {
-                setSnackbarMessage(t('shareLink'));
-                setSnackbarOpen(true);
+                showToast('shareLink', 'success');
             })
             .catch(err => {
                 console.error('Failed to copy:', err);
-                setSnackbarMessage(t('shareError'));
-                setSnackbarOpen(true);
+                showToast('shareError', 'error');
             });
     };
 
-    const handleCloseSnackbar = () => {
-        setSnackbarOpen(false);
-    };
-
-
     return (
-        <>
-            <IconButton
-                color="primary"
+        <IconButton
+            color="primary"
                 onClick={handleShare}
                 aria-label={t('share')}
                 disabled={disabled}
-            >
-                <ShareIcon />
-            </IconButton>
-            <Snackbar
-                open={snackbarOpen}
-                autoHideDuration={6000}
-                onClose={handleCloseSnackbar}
-                message={snackbarMessage}
-            />
-        </>
+        >
+            <ShareIcon />
+        </IconButton>
     );
 }

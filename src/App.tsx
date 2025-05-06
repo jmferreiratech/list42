@@ -9,6 +9,7 @@ import Loading from "./components/Loading.tsx";
 import SignIn from "./components/SignIn.tsx";
 import ShareCodeRedeemer from "./components/ShareCodeRedeemer.tsx";
 import GroceryList from "./components/GroceryList.tsx";
+import { ToastProvider } from './components/Toast.tsx';
 
 const darkTheme = createTheme({
     palette: {
@@ -24,7 +25,9 @@ export default function AppWrapper() {
         <ThemeProvider theme={darkTheme}>
             <CssBaseline/>
             <Provider store={store}>
-                <App />
+                <ToastProvider>
+                    <App />
+                </ToastProvider>
             </Provider>
         </ThemeProvider>
     );

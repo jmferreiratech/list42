@@ -18,6 +18,7 @@ import AddIcon from '@mui/icons-material/Add';
 import {createId} from '@paralleldrive/cuid2';
 
 import api, {GroceryItem} from '../api';
+import { useToast } from './Toast.tsx'; // Import useToast
 
 export default function GroceryList({ listId = 'mine' }: { listId?: string }) {
     const { t } = useTranslation();
@@ -205,11 +206,12 @@ function Item({ item, handleToggleComplete, handleDeleteItem, setEditingItemId }
 }
 
 function useItemsList(listId: string = 'mine') {
+    const { showToast } = useToast();
+    const [tempItem, setTempItem] = useState<GroceryItem | null>(null);
     const { data: groceryListData, isLoading, isError } = api.endpoints.getGroceryList.useQuery({ id: listId });
     const [addGroceryListItem, { isLoading: isAdding }] = api.endpoints.addItem.useMutation();
     const [updateGroceryListItem, { isLoading: isUpdating }] = api.endpoints.updateItem.useMutation();
     const [deleteGroceryListItem, { isLoading: isDeleting }] = api.endpoints.deleteItem.useMutation();
-    const [tempItem, setTempItem] = useState<GroceryItem | null>(null);
 
     const savedItems = groceryListData?.items || [];
 
@@ -245,7 +247,12 @@ function useItemsList(listId: string = 'mine') {
 
         const itemToDelete = savedItems.find(item => item.id === id);
         if (itemToDelete) {
-            deleteGroceryListItem({ id: listId, item: itemToDelete });
+            deleteGroceryListItem({ id: listId, item: itemToDelete })
+                .unwrap()
+                .catch(error => {
+                    console.error('Failed to delete item:', error);
+                    showToast('deleteItemError', 'error');
+                });
         }
     };
 
@@ -261,8 +268,13 @@ function useItemsList(listId: string = 'mine') {
                     id: createId()
                 };
 
-                addGroceryListItem({ id: listId, item: itemToSave });
-                setTempItem(null);
+                addGroceryListItem({ id: listId, item: itemToSave })
+                    .unwrap()
+                    .then(() => setTempItem(null))
+                    .catch(error => {
+                        console.error('Failed to add item:', error);
+                        showToast('addItemError', 'error');
+                    });
             }
             return;
         }
@@ -276,7 +288,12 @@ function useItemsList(listId: string = 'mine') {
             });
 
             if (hasChanged) {
-                updateGroceryListItem({ id: listId, item: updatedItem });
+                updateGroceryListItem({ id: listId, item: updatedItem })
+                    .unwrap()
+                    .catch(error => {
+                        console.error('Failed to update item:', error);
+                        showToast('updateItemError', 'error');
+                    });
             }
         }
     };

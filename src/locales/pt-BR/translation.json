@@ -17,5 +17,10 @@
   "addItem": "Adicionar item",
   "pending": "Pendentes",
   "completed": "Pronto",
-  "swipeToNavigate": "Deslize para navegar entre as abas"
+  "swipeToNavigate": "Deslize para navegar entre as abas",
+  "shareRedeemSuccess": "Lista compartilhada adicionada com sucesso!",
+  "shareRedeemError": "Falha ao adicionar lista compartilhada. O código pode ser inválido ou expirado.",
+  "addItemError": "Falha ao adicionar item.",
+  "updateItemError": "Falha ao atualizar item.",
+  "deleteItemError": "Falha ao excluir item."
 }
