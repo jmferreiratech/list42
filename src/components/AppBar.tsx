@@ -23,11 +23,16 @@ export default function AppBar({ selectedListId, onListChange }: {
                          alt={t('appName')}
                          sx={{ height: 32, width: 'auto' }} />
 
-                    <Box sx={{ flexGrow: 1, mx: 2 }}>
+                    <Box sx={{
+                        flexGrow: 1,
+                        mx: 2,
+                        maxWidth: { xs: 'calc(100vw - 180px)', sm: 'none' },
+                        overflow: 'hidden',
+                    }}>
                         <ListSelector value={selectedListId} onChange={onListChange} />
                     </Box>
 
-                    <Box sx={{ display: 'flex', alignItems: 'center' }}>
+                    <Box sx={{ display: 'flex', alignItems: 'center', flexShrink: 0 }}>
                         <ShareButton disabled={selectedListId !== 'mine'} />
                         <UserMenu />
                     </Box>
