@@ -1,7 +1,6 @@
-import {useState} from 'react';
 import {Container, CssBaseline} from '@mui/material';
 import {createTheme, ThemeProvider} from '@mui/material/styles';
-import authClient from './auth';
+import authClient, {type Session} from './auth';
 import AppBar from "./components/AppBar.tsx";
 import {store} from "./store.ts";
 import {Provider} from "react-redux";
@@ -10,6 +9,7 @@ import SignIn from "./components/SignIn.tsx";
 import ShareCodeRedeemer from "./components/ShareCodeRedeemer.tsx";
 import GroceryList from "./components/GroceryList.tsx";
 import { ToastProvider } from './components/Toast.tsx';
+import useLocalStorage from './hooks/useLocalStorage.ts';
 
 const darkTheme = createTheme({
     palette: {
@@ -35,7 +35,6 @@ export default function AppWrapper() {
 
 function App() {
     const {data, isPending} = authClient.useSession();
-    const [selectedListId, setSelectedListId] = useState<string>('mine');
 
     if (isPending) {
         return <Loading />;
@@ -44,6 +43,12 @@ function App() {
     if (!data) {
         return <SignIn />;
     }
+
+    return <InternalApp user={data.user} />;
+}
+
+function InternalApp({user}: {user: Session['user']}) {
+    const [selectedListId, setSelectedListId] = useLocalStorage(`${user.id}.selectedListId`, 'mine');
 
     return (
         <Container maxWidth="sm" sx={{mt: 2, pb: 10}}>

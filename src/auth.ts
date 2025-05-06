@@ -5,4 +5,7 @@ const authClient = createAuthClient({
     baseURL: `${settings.baseURL}/auth`,
 });
 
+
 export default authClient;
+
+export type Session = typeof authClient.$Infer.Session;
