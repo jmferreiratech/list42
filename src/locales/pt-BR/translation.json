@@ -22,5 +22,6 @@
   "shareRedeemError": "Falha ao adicionar lista compartilhada. O código pode ser inválido ou expirado.",
   "addItemError": "Falha ao adicionar item.",
   "updateItemError": "Falha ao atualizar item.",
-  "deleteItemError": "Falha ao excluir item."
+  "deleteItemError": "Falha ao excluir item.",
+  "shareOwnListOnly": "Você só pode compartilhar sua própria lista."
 }

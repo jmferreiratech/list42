@@ -100,14 +100,24 @@ function ShareButton({ disabled = false }: { disabled?: boolean }) {
             });
     };
 
+    const handleClick = () => {
+        if (disabled) {
+            showToast('shareOwnListOnly', 'warning');
+        } else {
+            handleShare();
+        }
+    };
+
     return (
-        <IconButton
-            color="primary"
-                onClick={handleShare}
+        <Box onClick={handleClick} sx={{ display: 'inline-flex', cursor: disabled ? 'not-allowed' : 'pointer' }}>
+            <IconButton
+                color="primary"
                 aria-label={t('share')}
                 disabled={disabled}
-        >
-            <ShareIcon />
-        </IconButton>
+                sx={{ pointerEvents: 'none' }}
+            >
+                <ShareIcon />
+            </IconButton>
+        </Box>
     );
 }
