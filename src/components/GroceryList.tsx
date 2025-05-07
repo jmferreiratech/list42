@@ -10,6 +10,7 @@ import {
     ListItemText,
     Tab,
     Tabs,
+    Collapse,
     TextField
 } from '@mui/material';
 import {useTranslation} from 'react-i18next';
@@ -18,7 +19,8 @@ import AddIcon from '@mui/icons-material/Add';
 import {createId} from '@paralleldrive/cuid2';
 
 import api, {GroceryItem} from '../api';
-import { useToast } from './Toast.tsx'; // Import useToast
+import { useToast } from './Toast.tsx';
+import {TransitionGroup} from "react-transition-group";
 
 export default function GroceryList({ listId = 'mine' }: { listId?: string }) {
     const { t } = useTranslation();
@@ -85,26 +87,30 @@ export default function GroceryList({ listId = 'mine' }: { listId?: string }) {
             </Box>
             <HorizontalSwipeRegion onChange={val => setActiveTab(val === 'left' ? 1 : 0)}>
                 <List>
-                {filteredItems.map((item) => (
-                    editingItemId === item.id ? (
-                        <EditingItem
-                            key={item.id}
-                            item={item}
-                            onSave={handleSave}
-                            handleDeleteItem={handleDelete}
-                            handleToggleComplete={(id, value) => handleToggle(id, value)}
-                            selectedList={listId}
-                        />
-                    ) : (
-                        <Item
-                            key={item.id}
-                            item={item}
-                            handleToggleComplete={() => handleToggle(item.id, item.completed)}
-                            handleDeleteItem={handleDelete}
-                            setEditingItemId={setEditingItemId}
-                        />
-                    )
-                ))}
+                    <TransitionGroup>
+                        {filteredItems.map((item) => (
+                            <Collapse key={item.id}>
+                                {
+                                    editingItemId === item.id ? (
+                                        <EditingItem
+                                            item={item}
+                                            onSave={handleSave}
+                                            handleDeleteItem={handleDelete}
+                                            handleToggleComplete={(id, value) => handleToggle(id, value)}
+                                            selectedList={listId}
+                                        />
+                                    ) : (
+                                        <Item
+                                            item={item}
+                                            handleToggleComplete={() => handleToggle(item.id, item.completed)}
+                                            handleDeleteItem={handleDelete}
+                                            setEditingItemId={setEditingItemId}
+                                        />
+                                    )
+                                }
+                            </Collapse>
+                        ))}
+                    </TransitionGroup>
                 </List>
             </HorizontalSwipeRegion>
             <Fab
@@ -170,6 +176,15 @@ interface ItemProps {
 
 function Item({ item, handleToggleComplete, handleDeleteItem, setEditingItemId }: ItemProps) {
     const { t } = useTranslation();
+    const [checked, setChecked] = useState<boolean>(item.completed);
+
+    const handleChecked = () => {
+        setChecked(val => {
+            setTimeout(() => handleToggleComplete(item.id), 0);
+            return !val;
+        })
+    };
+
     return (
         <ListItem
             secondaryAction={
@@ -185,11 +200,11 @@ function Item({ item, handleToggleComplete, handleDeleteItem, setEditingItemId }
         >
             <Checkbox
                 edge="start"
-                checked={item.completed}
+                checked={checked}
                 tabIndex={-1}
                 disableRipple
                 inputProps={{ 'aria-labelledby': `list-item-label-${item.id}` }}
-                onClick={() => handleToggleComplete(item.id)}
+                onClick={handleChecked}
             />
             <ListItemText
                 id={`list-item-label-${item.id}`}
