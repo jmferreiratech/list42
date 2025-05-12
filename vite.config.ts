@@ -1,8 +1,11 @@
-import {defineConfig} from 'vite'
-import react from '@vitejs/plugin-react'
-import {VitePWA} from 'vite-plugin-pwa'
+import react from '@vitejs/plugin-react';
+import { defineConfig, loadEnv } from 'vite';
+import { VitePWA } from 'vite-plugin-pwa';
+import { defineConfig as vitestConfig } from "vitest/config";
 
-export default defineConfig({
+const env = loadEnv('tests', process.cwd(), '');
+
+const config = defineConfig({
     plugins: [
         react(),
         VitePWA({
@@ -42,4 +45,25 @@ export default defineConfig({
         }),
     ],
     base: '/list42/',
-})
+});
+
+const testConfig = vitestConfig({
+    test: {
+        globals: true,
+        environment: 'happy-dom',
+        env: {
+            ...env,
+            VITE_BASE_URL: 'http://localhost:12345',
+        },
+        setupFiles: ['./vitest.setup.ts'],
+        coverage: {
+            reporter: ['text', 'json', 'html'],
+            exclude: ['node_modules/', 'src/vite-env.d.ts']
+        }
+    }
+});
+
+export default {
+    ...config,
+    ...testConfig,
+};

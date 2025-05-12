@@ -1,11 +1,12 @@
 import { useState } from 'react';
 import { Button, Menu, MenuItem, Avatar, Typography, Box } from '@mui/material';
 import { useTranslation } from 'react-i18next';
-import authClient from '../auth.ts';
+import { useAuth } from './Auth.tsx';
 
 export default function UserMenu() {
     const { t } = useTranslation();
     const [anchorEl, setAnchorEl] = useState<null | HTMLElement>(null);
+    const authClient = useAuth();
     const {data, isPending} = authClient.useSession()
 
     if (isPending || !data)

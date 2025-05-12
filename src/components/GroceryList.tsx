@@ -40,8 +40,8 @@ export default function GroceryList({ listId = 'mine' }: { listId?: string }) {
         }
     };
 
-    const handleSave = (id: GroceryItem['id'], name: GroceryItem['name']) => {
-        updateItem(id, { name });
+    const handleSave = async (id: GroceryItem['id'], name: GroceryItem['name']) => {
+        await updateItem(id, { name });
 
         if (id.startsWith('new')) {
             const newId = addItem();
@@ -254,7 +254,7 @@ function useItemsList(listId: string = 'mine') {
         return newItem.id;
     };
 
-    const deleteItem = (id: GroceryItem['id']) => {
+    const deleteItem = async (id: GroceryItem['id']) => {
         if (id.startsWith('new') && tempItem) {
             setTempItem(null);
             return;
@@ -262,16 +262,16 @@ function useItemsList(listId: string = 'mine') {
 
         const itemToDelete = savedItems.find(item => item.id === id);
         if (itemToDelete) {
-            deleteGroceryListItem({ id: listId, item: itemToDelete })
-                .unwrap()
-                .catch(error => {
-                    console.error('Failed to delete item:', error);
-                    showToast('deleteItemError', 'error');
-                });
+            try {
+                await deleteGroceryListItem({ id: listId, item: itemToDelete }).unwrap();
+            } catch (error) {
+                console.error('Failed to delete item:', error);
+                showToast('deleteItemError', 'error');
+            }
         }
     };
 
-    const updateItem = (id: GroceryItem['id'], updates: Partial<Omit<GroceryItem, 'id'>>) => {
+    const updateItem = async (id: GroceryItem['id'], updates: Partial<Omit<GroceryItem, 'id'>>) => {
         if (id.startsWith('new') && tempItem) {
             const updatedTempItem = { ...tempItem, ...updates };
 
@@ -283,13 +283,13 @@ function useItemsList(listId: string = 'mine') {
                     id: createId()
                 };
 
-                addGroceryListItem({ id: listId, item: itemToSave })
-                    .unwrap()
-                    .then(() => setTempItem(null))
-                    .catch(error => {
-                        console.error('Failed to add item:', error);
-                        showToast('addItemError', 'error');
-                    });
+                try {
+                    await addGroceryListItem({ id: listId, item: itemToSave }).unwrap();
+                    setTempItem(null);
+                } catch (error) {
+                    console.error('Failed to add item:', error);
+                    showToast('addItemError', 'error');
+                }
             }
             return;
         }
@@ -303,12 +303,12 @@ function useItemsList(listId: string = 'mine') {
             });
 
             if (hasChanged) {
-                updateGroceryListItem({ id: listId, item: updatedItem })
-                    .unwrap()
-                    .catch(error => {
-                        console.error('Failed to update item:', error);
-                        showToast('updateItemError', 'error');
-                    });
+                try {
+                    await updateGroceryListItem({ id: listId, item: updatedItem }).unwrap();
+                } catch (error) {
+                    console.error('Failed to update item:', error);
+                    showToast('updateItemError', 'error');
+                }
             }
         }
     };
@@ -326,7 +326,7 @@ function useItemsList(listId: string = 'mine') {
 
 interface EditingItemProps {
     item: GroceryItem;
-    onSave: (id: GroceryItem['id'], name: GroceryItem['name']) => void;
+    onSave: (id: GroceryItem['id'], name: GroceryItem['name']) => Promise<void>;
     handleDeleteItem: (id: GroceryItem['id']) => void;
     handleToggleComplete: (id: GroceryItem['id'], currentValue: boolean) => void;
     selectedList: string;
@@ -341,6 +341,7 @@ function EditingItem({
 }: EditingItemProps) {
     const [currentName, setCurrentName] = useState(item.name);
     const { data: groceryListData } = api.endpoints.getGroceryList.useQuery({ id: selectedList });
+    const saveInProgress = useRef(false);
 
     const suggestions = useMemo(() => {
         if (!groceryListData?.items) return [];
@@ -348,14 +349,29 @@ function EditingItem({
             groceryListData.items.map(item => item.name)
         )).filter(name => name.trim() !== '');
     }, [groceryListData]);
+    
+    const saveChanges =  async () => {
+        if (saveInProgress.current)
+             return;
 
-    const saveChanges = () => {
+        saveInProgress.current = true;
+        
         const trimmedName = currentName.trim();
         if (trimmedName === '') {
             handleDeleteItem(item.id);
         } else {
-            onSave(item.id, trimmedName);
+            const existingItem = groceryListData?.items.find(i => i.name.trim().toLocaleLowerCase() === trimmedName.toLocaleLowerCase() && i.completed);
+            if (existingItem) {
+                handleToggleComplete(existingItem.id, existingItem.completed);
+                setCurrentName('');
+            } else {
+                await onSave(item.id, trimmedName);
+            }
         }
+        
+        setTimeout(() => {
+            saveInProgress.current = false;
+        }, 100);
     };
 
     const handleKeyPress = (event: React.KeyboardEvent) => {
@@ -421,7 +437,7 @@ function EditingItem({
                             disableUnderline: true
                         }}
                         onBlur={saveChanges}
-                        onKeyPress={handleKeyPress}
+                        onKeyUp={handleKeyPress}
                         autoFocus
                     />
                 )}

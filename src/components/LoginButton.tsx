@@ -1,10 +1,12 @@
 import { Button } from '@mui/material';
 import GoogleIcon from '@mui/icons-material/Google';
 import { useTranslation } from 'react-i18next';
-import authClient from '../auth';
+import { useAuth } from './Auth';
 
 export default function LoginButton() {
+    const authClient = useAuth();
     const { t } = useTranslation();
+
     const handleLogin = async () => {
         try {
             await authClient.signIn.social({

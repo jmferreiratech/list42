@@ -1,11 +1,12 @@
 import { createAuthClient } from "better-auth/react"
 import settings from "./settings.ts";
 
-const authClient = createAuthClient({
-    baseURL: `${settings.baseURL}/auth`,
-});
+export function setupAuthClient() {
+    return createAuthClient({
+        baseURL: `${settings.baseURL}/auth`,
+    });
+}
 
+export type AuthClient = ReturnType<typeof createAuthClient>;
 
-export default authClient;
-
-export type Session = typeof authClient.$Infer.Session;
+export type Session = AuthClient['$Infer']['Session'];
