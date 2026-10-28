@@ -1,4 +1,4 @@
-import { cleanup, render, RenderOptions, waitFor } from '@testing-library/react';
+import { cleanup, fireEvent, render, RenderOptions, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { http, HttpResponse } from 'msw';
 import { setupServer } from 'msw/node';
@@ -189,6 +189,37 @@ describe('App', () => {
 
     await waitFor(() => {});
     await q.findByText('Leite');
+  });
+
+  it('shows completed items when swiping left to the screen edge', async () => {
+    server.use(
+      http.get(`${settings.baseURL}/auth/get-session`, () => {
+        return HttpResponse.json({user: {id: 'foo'}, session: {}});
+      }),
+      http.get(`${settings.baseURL}/lists`, () => {
+        return HttpResponse.json([{id: 'mine', name: 'Minha Lista'}]);
+      }),
+      http.get(`${settings.baseURL}/lists/mine`, () => {
+        return HttpResponse.json({
+          id: 'mine',
+          name: 'Minha Lista',
+          items: [
+            {id: 'item1', name: 'Leite', completed: true},
+            {id: 'item2', name: 'Manteiga', completed: false}
+          ]
+        });
+      }),
+    );
+
+    const {q} = renderWithProviders(<App />);
+    const list = (await q.findByText('Manteiga')).closest('ul');
+    if (!list) throw new Error('Grocery list not found');
+
+    fireEvent.touchStart(list, {targetTouches: [{clientX: 100}]});
+    fireEvent.touchMove(list, {targetTouches: [{clientX: 0}]});
+    fireEvent.touchEnd(list);
+
+    expect(await q.findByText('Leite')).toBeInTheDocument();
   });
 });
 

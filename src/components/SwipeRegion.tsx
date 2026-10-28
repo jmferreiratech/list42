@@ -15,7 +15,7 @@ export function HorizontalSwipeRegion({children, onChange}: {children: React.Rea
     };
 
     const handleTouchEnd = () => {
-        if (!touchStartX.current || !touchEndX.current) return;
+        if (touchStartX.current === null || touchEndX.current === null) return;
 
         const distance = touchStartX.current - touchEndX.current;
         const isLeftSwipe = distance > minSwipeDistance;
