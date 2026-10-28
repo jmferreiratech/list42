@@ -11,20 +11,20 @@ export default function ShareCodeRedeemer({ onListRedeemed }: { onListRedeemed: 
         const shareCode = url.searchParams.get('shared');
 
         if (shareCode) {
-            redeemShareCode({ shareCode })
-                .unwrap()
-                .then((response) => {
+            (async () => {
+                try {
+                    const response = await redeemShareCode({ shareCode }).unwrap();
                     url.searchParams.delete('shared');
                     window.history.replaceState({}, document.title, url.toString());
                     showToast('shareRedeemSuccess', 'success');
                     if (response && response.id) {
                         onListRedeemed(response.id);
                     }
-                })
-                .catch(error => {
+                } catch (error) {
                     console.error('Error redeeming share code:', error);
                     showToast('shareRedeemError', 'error');
-                });
+                }
+            })();
         }
     }, [redeemShareCode, onListRedeemed, showToast]);
 
