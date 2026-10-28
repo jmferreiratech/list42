@@ -1,8 +1,10 @@
-import {TouchEvent, useMemo, useRef, useState} from 'react';
+import AddIcon from '@mui/icons-material/Add';
+import DeleteIcon from '@mui/icons-material/Delete';
 import {
     Autocomplete,
     Box,
     Checkbox,
+    Collapse,
     Fab,
     IconButton,
     List,
@@ -10,17 +12,16 @@ import {
     ListItemText,
     Tab,
     Tabs,
-    Collapse,
     TextField
 } from '@mui/material';
-import {useTranslation} from 'react-i18next';
-import DeleteIcon from '@mui/icons-material/Delete';
-import AddIcon from '@mui/icons-material/Add';
-import {createId} from '@paralleldrive/cuid2';
+import { createId } from '@paralleldrive/cuid2';
+import { useMemo, useRef, useState } from 'react';
+import { useTranslation } from 'react-i18next';
 
-import api, {GroceryItem} from '../api';
+import { TransitionGroup } from "react-transition-group";
+import api, { GroceryItem } from '../api';
+import { HorizontalSwipeRegion } from './SwipeRegion.tsx';
 import { useToast } from './Toast.tsx';
-import {TransitionGroup} from "react-transition-group";
 
 export default function GroceryList({ listId = 'mine' }: { listId?: string }) {
     const { t } = useTranslation();
@@ -123,47 +124,6 @@ export default function GroceryList({ listId = 'mine' }: { listId?: string }) {
                 <AddIcon/>
             </Fab>
         </>
-    )
-}
-
-function HorizontalSwipeRegion({children, onChange}: {children: React.ReactElement, onChange: (val: 'left'|'right') => void}) {
-    const touchStartX = useRef<number | null>(null);
-    const touchEndX = useRef<number | null>(null);
-    const minSwipeDistance = 50;
-
-    const handleTouchStart = (e: TouchEvent) => {
-        touchStartX.current = e.targetTouches[0].clientX;
-    };
-
-    const handleTouchMove = (e: TouchEvent) => {
-        touchEndX.current = e.targetTouches[0].clientX;
-    };
-
-    const handleTouchEnd = () => {
-        if (!touchStartX.current || !touchEndX.current) return;
-
-        const distance = touchStartX.current - touchEndX.current;
-        const isLeftSwipe = distance > minSwipeDistance;
-        const isRightSwipe = distance < -minSwipeDistance;
-
-        if (isLeftSwipe) {
-            onChange('left');
-        } else if (isRightSwipe) {
-            onChange('right');
-        }
-
-        touchStartX.current = null;
-        touchEndX.current = null;
-    };
-
-    return (
-        <Box
-            onTouchStart={handleTouchStart}
-            onTouchMove={handleTouchMove}
-            onTouchEnd={handleTouchEnd}
-        >
-            {children}
-        </Box>
     )
 }
 
