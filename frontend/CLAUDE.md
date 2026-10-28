@@ -1,10 +1,10 @@
 # CLAUDE.md
 
-This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
+This file provides guidance to Claude Code (claude.ai/code) when working with the frontend in `frontend/`. Paths below are relative to `frontend/`; run commands from there.
 
 ## Project
 
-List42 ("List For Two") is a shared grocery-list PWA. It is frontend only: React 19 + TypeScript + Vite, MUI v7 (dark theme, primary `#42b883`), Redux Toolkit / RTK Query, `better-auth` for sessions, and i18next (only `pt-BR`). The backend API lives elsewhere and is reached at `${VITE_BASE_URL}/api`.
+List42 ("List For Two") is a shared grocery-list PWA. This is the frontend: React 19 + TypeScript + Vite, MUI v7 (dark theme, primary `#42b883`), Redux Toolkit / RTK Query, `better-auth` for sessions, and i18next (only `pt-BR`). The backend API is reached at `${VITE_BASE_URL}/api`.
 
 ## Commands
 
@@ -22,7 +22,7 @@ yarn vitest run src/App.spec.tsx -t "adds an empty new item"   # single test by 
 yarn generate-pwa-assets     # regenerate icons in public/ from public/logo.svg
 ```
 
-`VITE_BASE_URL` comes from `.env` (gitignored). The app is served under the base path `/list42/`. Pushing to `main` deploys to GitHub Pages (`.github/workflows/deploy.yml`, which reads `VITE_BASE_URL` from the repo variable `vars.VITE_BASE_URL`). CI only builds; it does not run lint or tests.
+`VITE_BASE_URL` comes from `.env` (gitignored). The app is served under the base path `/list42/`. Pushing to `main` deploys to GitHub Pages (`../.github/workflows/deploy.yml`, which builds from `frontend/` and reads `VITE_BASE_URL` from the repo variable `vars.VITE_BASE_URL`). CI only builds; it does not run lint or tests.
 
 ## Architecture
 
