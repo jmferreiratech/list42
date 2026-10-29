@@ -1,0 +1,16 @@
+functions:
+  api-auth:
+    handler: src/api/auth/lambda.handler
+    events:
+      - http:
+          path: 'api/auth'
+          method: ANY
+          cors:
+            origin: ${self:custom.secrets.ORIGINS}
+            allowCredentials: true
+      - http:
+          path: 'api/auth/{proxy+}'
+          method: ANY
+          cors:
+            origin: ${self:custom.secrets.ORIGINS}
+            allowCredentials: true

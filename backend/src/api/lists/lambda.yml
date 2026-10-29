@@ -1,0 +1,16 @@
+functions:
+  api-lists:
+    handler: src/api/lists/lambda.handler
+    events:
+      - http:
+          path: 'api/lists'
+          method: ANY
+          cors:
+            origin: ${self:custom.secrets.ORIGINS}
+            allowCredentials: true
+      - http:
+          path: 'api/lists/{proxy+}'
+          method: ANY
+          cors:
+            origin: ${self:custom.secrets.ORIGINS}
+            allowCredentials: true

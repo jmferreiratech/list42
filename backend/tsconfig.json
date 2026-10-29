@@ -1,0 +1,15 @@
+{
+  "include": ["src/**/*"],
+  "extends": ["@tsconfig/strictest/tsconfig", "@tsconfig/node22/tsconfig", "@tsconfig/node-ts/tsconfig.json"],
+  "compilerOptions": {
+    "typeRoots": ["src/@types"],
+    "baseUrl": "src",
+    "noEmit": true,
+    "forceConsistentCasingInFileNames": true,
+    "allowSyntheticDefaultImports": true,
+    "strictNullChecks": true,
+    "noPropertyAccessFromIndexSignature": false,
+    "module": "preserve",
+    "moduleResolution": "bundler"
+  }
+}
