@@ -1,0 +1,33 @@
+resources:
+  Resources:
+    ListSharesTable:
+      Type: AWS::DynamoDB::Table
+      Properties:
+        TableName: list_shares
+        BillingMode: PAY_PER_REQUEST
+        AttributeDefinitions:
+          -
+            AttributeName: user
+            AttributeType: S
+          -
+            AttributeName: list
+            AttributeType: S
+          -
+            AttributeName: id
+            AttributeType: S
+        KeySchema:
+          -
+            AttributeName: user
+            KeyType: HASH
+          -
+            AttributeName: list
+            KeyType: RANGE
+        GlobalSecondaryIndexes:
+          -
+            IndexName: 'list_shares_by_id'
+            KeySchema:
+              -
+                AttributeName: id
+                KeyType: HASH
+            Projection:
+              ProjectionType: ALL

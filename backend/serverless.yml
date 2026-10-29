@@ -1,0 +1,65 @@
+service: list42-backend
+frameworkVersion: '3'
+
+custom:
+  esbuild:
+    packager: yarn
+    minify: true
+    sourcemap: true
+    exclude: ['@aws-sdk/*']
+  gitVariablesEnvWhitelist: []
+  gitVariablesTagsWhitelist: ['GIT_REPOSITORY', 'GIT_COMMIT_LONG', 'GIT_BRANCH', 'GIT_IS_DIRTY']
+  scriptable:
+    hooks:
+      before:package:initialize: tsc
+  secrets: ${file(./secrets.yml)}
+
+provider:
+  name: aws
+  runtime: nodejs22.x
+  deploymentMethod: direct
+  stage: v1
+  timeout: 28
+  memorySize: 1024
+  versionFunctions: false
+  apiGateway:
+    minimumCompressionSize: 1024
+    shouldStartNameWithService: true
+  logs:
+    httpApi: true
+  environment:
+    $<<: ${self:custom.secrets}
+    NODE_OPTIONS: '--enable-source-maps --stack-trace-limit=1000'
+    SERVICE_ENDPOINT: !Join ["", ["https://", !Ref ApiGatewayRestApi, ".execute-api.", !Ref AWS::Region, ".", !Ref AWS::URLSuffix, "/v1"]]
+  iam:
+    role:
+      statements:
+        - Effect: Allow
+          Action:
+            - dynamodb:*
+          Resource:
+            - !GetAtt UsersTable.Arn
+            - !GetAtt AccountsTable.Arn
+            - !GetAtt SessionsTable.Arn
+            - !GetAtt VerificationsTable.Arn
+            - !GetAtt GroceryListsTable.Arn
+            - !GetAtt ListSharesTable.Arn
+            - !Join ["/", [!GetAtt ListSharesTable.Arn, "index", "list_shares_by_id"]]
+
+package:
+  individually: true
+
+functions:
+  - ${file(./src/api/auth/lambda.yml):functions}
+  - ${file(./src/api/lists/lambda.yml):functions}
+
+resources:
+  - ${file(./src/modules/auth/resources.yml):resources}
+  - ${file(./src/modules/lists/resources.yml):resources}
+  - ${file(./src/modules/shares/resources.yml):resources}
+
+plugins:
+  - serverless-esbuild
+  - serverless-scriptable-plugin
+  - serverless-plugin-git-variables
+  - '@cruglobal/serverless-merge-config'
