@@ -5,7 +5,7 @@ import { setupServer } from 'msw/node';
 import { Provider } from 'react-redux';
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import App from './App';
-import { GroceryItem } from './api';
+import { GroceryItem, groceryApi } from './api';
 import { setupAuthClient } from './auth';
 import { AuthProvider } from './components/Auth';
 import settings from './settings';
@@ -400,6 +400,23 @@ describe('App', () => {
 
     const options = await q.findAllByRole('option');
     expect(options.map(option => option.textContent)).toEqual(['Pão de forma', 'Papel toalha', 'Feijão preto']);
+  });
+
+  it('loads changes made elsewhere when the app regains focus', async () => {
+    mockSignedInUser({items: []});
+    server.use(
+      http.get(`${settings.baseURL}/lists/mine`, () => HttpResponse.json({id: 'mine', items: []}), {once: true}),
+      http.get(`${settings.baseURL}/lists/mine`, () => {
+        return HttpResponse.json({id: 'mine', items: [{id: 'item1', name: 'Café', completed: false}]});
+      }),
+    );
+
+    const {q, store} = renderWithProviders(<App />);
+    await q.findByText('emptyPending');
+    // RTK Query wires window focus events to the first store only, so dispatch what that listener sends.
+    store.dispatch(groceryApi.internalActions.onFocus());
+
+    expect(await q.findByText('Café')).toBeInTheDocument();
   });
 
   it('shows the list name in the app bar when the user has a single list', async () => {

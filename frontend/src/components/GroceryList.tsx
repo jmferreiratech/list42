@@ -27,6 +27,9 @@ import api, { GroceryItem } from '../api';
 import { HorizontalSwipeRegion } from './SwipeRegion.tsx';
 import { useToast } from './Toast.tsx';
 
+// Picks up changes made by the other person on a shared list.
+const LIST_POLLING_INTERVAL_MS = 30_000;
+
 export default function GroceryList({ listId = 'mine' }: { listId?: string }) {
     const { t } = useTranslation();
     const [editingItemId, setEditingItemId] = useState<GroceryItem['id'] | null>(null);
@@ -236,7 +239,10 @@ function Item({ item, handleToggleComplete, handleDeleteItem, setEditingItemId }
 function useItemsList(listId: string = 'mine') {
     const { showToast } = useToast();
     const [tempItem, setTempItem] = useState<GroceryItem | null>(null);
-    const { data: groceryListData, isLoading, isError, refetch } = api.endpoints.getGroceryList.useQuery({ id: listId });
+    const { data: groceryListData, isLoading, isError, refetch } = api.endpoints.getGroceryList.useQuery(
+        { id: listId },
+        { pollingInterval: LIST_POLLING_INTERVAL_MS, skipPollingIfUnfocused: true, refetchOnFocus: true },
+    );
     const [addGroceryListItem, { isLoading: isAdding }] = api.endpoints.addItem.useMutation();
     const [updateGroceryListItem, { isLoading: isUpdating }] = api.endpoints.updateItem.useMutation();
     const [deleteGroceryListItem, { isLoading: isDeleting }] = api.endpoints.deleteItem.useMutation();
