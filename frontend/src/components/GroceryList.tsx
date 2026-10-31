@@ -407,7 +407,6 @@ function useItemsList(listId: string = 'mine') {
         updateItem,
         deleteItem,
         isLoading,
-        isUpdating: isSavingItems,
         hasLoadFailed: isError && !groceryListData,
         retryLoad: () => { refetch(); },
     };
