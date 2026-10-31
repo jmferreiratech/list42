@@ -236,6 +236,14 @@ describe('App', () => {
     expect(q.queryByLabelText('share')).not.toBeInTheDocument();
   });
 
+  it('shows the list name in the app bar when the user has a single list', async () => {
+    mockSignedInUser({items: [], lists: [{id: 'mine', name: 'Minha Lista'}]});
+
+    const {q} = renderWithProviders(<App />);
+
+    expect(await q.findByRole('heading', {name: 'Minha Lista'})).toBeInTheDocument();
+  });
+
   it('shows an error toast when sign in fails', async () => {
     server.use(
       http.get(`${settings.baseURL}/auth/get-session`, () => HttpResponse.json(null)),
