@@ -235,6 +235,21 @@ describe('App', () => {
 
     expect(q.queryByLabelText('share')).not.toBeInTheDocument();
   });
+
+  it('builds the share link from the app base path, dropping the current query and hash', async () => {
+    window.history.replaceState({}, '', '/list42/?foo=bar#section');
+    mockSignedInUser({items: []});
+    server.use(
+      http.get(`${settings.baseURL}/lists/mine/share-code`, () => HttpResponse.json('abc123')),
+    );
+
+    const {q, user} = renderWithProviders(<App />);
+    await user.click(await q.findByLabelText('share'));
+
+    await waitFor(async () => {
+      expect(await navigator.clipboard.readText()).toBe(`${window.location.origin}/list42/?shared=abc123`);
+    });
+  });
 });
 
 interface MockSignedInUserOptions {
@@ -271,6 +286,7 @@ beforeEach(() => {
 afterEach(() => {
   cleanup();
   localStorage.clear();
+  window.history.replaceState({}, '', '/');
   server.resetHandlers();
   expect(unhandledRequests).toEqual([]);
 });

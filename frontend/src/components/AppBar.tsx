@@ -2,6 +2,7 @@ import {AppBar as MuiAppBar, Box, IconButton, Slide, Toolbar, useScrollTrigger} 
 import ShareIcon from '@mui/icons-material/Share';
 import {useTranslation} from 'react-i18next';
 import api from "../api";
+import settings from "../settings";
 import UserMenu from "./UserMenu.tsx";
 import ListSelector from "./ListSelector.tsx";
 import { useToast } from './Toast.tsx';
@@ -76,7 +77,7 @@ function ShareButton() {
             return;
         }
 
-        const link = `${window.location.href}?shared=${shareCode}`;
+        const link = buildShareLink(shareCode);
 
         if (navigator.share) {
             try {
@@ -114,4 +115,10 @@ function ShareButton() {
             <ShareIcon />
         </IconButton>
     );
+}
+
+function buildShareLink(shareCode: string): string {
+    const url = new URL(settings.appBasePath, window.location.origin);
+    url.searchParams.set('shared', shareCode);
+    return url.toString();
 }
