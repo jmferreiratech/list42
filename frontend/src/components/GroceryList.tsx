@@ -456,11 +456,8 @@ function EditingItem({
                         {...params}
                         variant="standard"
                         fullWidth
+                        placeholder={t('enterItemName')}
                         sx={{ ml: 1 }}
-                        InputProps={{
-                            ...params.InputProps,
-                            disableUnderline: true
-                        }}
                         onBlur={saveChanges}
                         onKeyDown={handleKeyDown}
                         onKeyUp={handleKeyUp}

@@ -343,6 +343,15 @@ describe('App', () => {
     expect(q.getByRole('tab', {name: 'completed (2)'})).toBeInTheDocument();
   });
 
+  it('shows a placeholder in the new item field', async () => {
+    mockSignedInUser({items: []});
+
+    const {q, user} = renderWithProviders(<App />);
+    await user.click(await q.findByLabelText('addItem'));
+
+    expect(await q.findByPlaceholderText('enterItemName')).toHaveFocus();
+  });
+
   it('shows the list name in the app bar when the user has a single list', async () => {
     mockSignedInUser({items: [], lists: [{id: 'mine', name: 'Minha Lista'}]});
 
