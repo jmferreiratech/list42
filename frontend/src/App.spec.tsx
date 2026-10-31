@@ -330,6 +330,19 @@ describe('App', () => {
     expect(await q.findByText('Leite')).toBeInTheDocument();
   });
 
+  it('shows how many items each tab holds', async () => {
+    mockSignedInUser({items: [
+      {id: 'item1', name: 'Leite', completed: true},
+      {id: 'item2', name: 'Pão', completed: true},
+      {id: 'item3', name: 'Manteiga', completed: false},
+    ]});
+
+    const {q} = renderWithProviders(<App />);
+
+    expect(await q.findByRole('tab', {name: 'pending (1)'})).toBeInTheDocument();
+    expect(q.getByRole('tab', {name: 'completed (2)'})).toBeInTheDocument();
+  });
+
   it('shows the list name in the app bar when the user has a single list', async () => {
     mockSignedInUser({items: [], lists: [{id: 'mine', name: 'Minha Lista'}]});
 

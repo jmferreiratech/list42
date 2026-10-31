@@ -20,7 +20,7 @@
   "deleteItem": "Excluir {{name}}",
   "editItem": "Editar {{name}}",
   "pending": "Pendentes",
-  "completed": "Pronto",
+  "completed": "Comprados",
   "emptyPending": "Nada pendente — toque em + para adicionar",
   "emptyCompleted": "Nenhum item comprado ainda",
   "loadListError": "Não foi possível carregar a lista.",

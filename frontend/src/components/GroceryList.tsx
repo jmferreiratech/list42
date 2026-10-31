@@ -78,6 +78,9 @@ export default function GroceryList({ listId = 'mine' }: { listId?: string }) {
     const filteredItems = items.filter(item =>
         activeTab === 0 ? !item.completed : item.completed
     );
+    const savedItems = items.filter(item => !item.id.startsWith('new'));
+    const pendingCount = savedItems.filter(item => !item.completed).length;
+    const completedCount = savedItems.length - pendingCount;
 
     return (
         <>
@@ -89,8 +92,8 @@ export default function GroceryList({ listId = 'mine' }: { listId?: string }) {
                     variant="fullWidth"
                     sx={{ width: '100%' }}
                 >
-                    <Tab label={t('pending')} id="pending-tab" aria-controls="pending-panel" />
-                    <Tab label={t('completed')} id="completed-tab" aria-controls="completed-panel" />
+                    <Tab label={`${t('pending')} (${pendingCount})`} id="pending-tab" aria-controls="pending-panel" />
+                    <Tab label={`${t('completed')} (${completedCount})`} id="completed-tab" aria-controls="completed-panel" />
                 </Tabs>
             </Box>
             <HorizontalSwipeRegion onChange={val => setActiveTab(val === 'left' ? 1 : 0)}>
