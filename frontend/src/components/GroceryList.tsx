@@ -136,14 +136,6 @@ interface ItemProps {
 
 function Item({ item, handleToggleComplete, handleDeleteItem, setEditingItemId }: ItemProps) {
     const { t } = useTranslation();
-    const [checked, setChecked] = useState<boolean>(item.completed);
-
-    const handleChecked = () => {
-        setChecked(val => {
-            setTimeout(() => handleToggleComplete(item.id), 0);
-            return !val;
-        })
-    };
 
     return (
         <ListItem
@@ -160,11 +152,11 @@ function Item({ item, handleToggleComplete, handleDeleteItem, setEditingItemId }
         >
             <Checkbox
                 edge="start"
-                checked={checked}
+                checked={item.completed}
                 tabIndex={-1}
                 disableRipple
                 inputProps={{ 'aria-labelledby': `list-item-label-${item.id}` }}
-                onClick={handleChecked}
+                onClick={() => handleToggleComplete(item.id)}
             />
             <ListItemText
                 id={`list-item-label-${item.id}`}

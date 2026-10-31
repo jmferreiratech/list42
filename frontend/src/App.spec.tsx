@@ -236,6 +236,19 @@ describe('App', () => {
     expect(q.queryByLabelText('share')).not.toBeInTheDocument();
   });
 
+  it('keeps the checkbox unchecked when completing an item fails', async () => {
+    mockSignedInUser({items: [{id: 'item1', name: 'Leite', completed: false}]});
+    server.use(
+      http.put(`${settings.baseURL}/lists/mine/items/item1`, () => HttpResponse.json({}, {status: 500})),
+    );
+
+    const {q, user} = renderWithProviders(<App />);
+    await user.click(await q.findByRole('checkbox', {name: 'Leite'}));
+
+    expect(await q.findByText('updateItemError')).toBeInTheDocument();
+    expect(await q.findByRole('checkbox', {name: 'Leite'})).not.toBeChecked();
+  });
+
   it('shows the list name in the app bar when the user has a single list', async () => {
     mockSignedInUser({items: [], lists: [{id: 'mine', name: 'Minha Lista'}]});
 
