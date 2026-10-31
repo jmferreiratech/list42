@@ -64,8 +64,8 @@ export default function GroceryList({ listId = 'mine' }: { listId?: string }) {
         }
     };
 
-    const handleSave = async (id: GroceryItem['id'], name: GroceryItem['name']) => {
-        await updateItem(id, { name });
+    const handleSave = (id: GroceryItem['id'], name: GroceryItem['name']) => {
+        updateItem(id, { name });
 
         if (id.startsWith('new')) {
             const newId = addItem();
@@ -307,9 +307,9 @@ function useItemsList(listId: string = 'mine') {
         refetchInterval: isSavingItems ? false : LIST_POLLING_INTERVAL_MS,
         refetchOnWindowFocus: isSavingItems ? false : 'always',
     });
-    const { mutateAsync: addGroceryListItem } = useAddItem(listId);
-    const { mutateAsync: updateGroceryListItem } = useUpdateItem(listId);
-    const { mutateAsync: deleteGroceryListItem } = useDeleteItem(listId);
+    const { mutate: addGroceryListItem } = useAddItem(listId);
+    const { mutate: updateGroceryListItem } = useUpdateItem(listId);
+    const { mutate: deleteGroceryListItem } = useDeleteItem(listId);
 
     const savedItems = groceryListData?.items || [];
 
@@ -337,7 +337,7 @@ function useItemsList(listId: string = 'mine') {
         return newItem.id;
     };
 
-    const deleteItem = async (id: GroceryItem['id']) => {
+    const deleteItem = (id: GroceryItem['id']) => {
         if (id.startsWith('new') && tempItem) {
             setTempItem(null);
             return;
@@ -345,27 +345,21 @@ function useItemsList(listId: string = 'mine') {
 
         const itemToDelete = savedItems.find(item => item.id === id);
         if (itemToDelete) {
-            try {
-                await deleteGroceryListItem(itemToDelete);
-                showToast('itemDeleted', 'info', { label: 'undo', onClick: () => restoreItem(itemToDelete) });
-            } catch (error) {
-                console.error('Failed to delete item:', error);
-                showToast('deleteItemError', 'error');
-            }
+            deleteGroceryListItem(itemToDelete, {
+                onSuccess: () => showToast('itemDeleted', 'info', { label: 'undo', onClick: () => restoreItem(itemToDelete) }),
+                onError: error => reportError('Failed to delete item:', error, 'deleteItemError'),
+            });
         }
     };
 
     // Saving an item with its original id brings it back, since the API overwrites items by id.
-    const restoreItem = async (item: GroceryItem) => {
-        try {
-            await addGroceryListItem(item);
-        } catch (error) {
-            console.error('Failed to restore item:', error);
-            showToast('addItemError', 'error');
-        }
+    const restoreItem = (item: GroceryItem) => {
+        addGroceryListItem(item, {
+            onError: error => reportError('Failed to restore item:', error, 'addItemError'),
+        });
     };
 
-    const updateItem = async (id: GroceryItem['id'], updates: Partial<Omit<GroceryItem, 'id'>>) => {
+    const updateItem = (id: GroceryItem['id'], updates: Partial<Omit<GroceryItem, 'id'>>) => {
         if (id.startsWith('new') && tempItem) {
             const updatedTempItem = { ...tempItem, ...updates };
 
@@ -377,13 +371,11 @@ function useItemsList(listId: string = 'mine') {
                     id: createId()
                 };
 
-                try {
-                    await addGroceryListItem(itemToSave);
-                    setTempItem(null);
-                } catch (error) {
-                    console.error('Failed to add item:', error);
-                    showToast('addItemError', 'error');
-                }
+                // The optimistic update already shows the saved item, so the temp copy can go.
+                setTempItem(null);
+                addGroceryListItem(itemToSave, {
+                    onError: error => reportError('Failed to add item:', error, 'addItemError'),
+                });
             }
             return;
         }
@@ -397,14 +389,16 @@ function useItemsList(listId: string = 'mine') {
             });
 
             if (hasChanged) {
-                try {
-                    await updateGroceryListItem(updatedItem);
-                } catch (error) {
-                    console.error('Failed to update item:', error);
-                    showToast('updateItemError', 'error');
-                }
+                updateGroceryListItem(updatedItem, {
+                    onError: error => reportError('Failed to update item:', error, 'updateItemError'),
+                });
             }
         }
+    };
+
+    const reportError = (message: string, error: Error, toastKey: string) => {
+        console.error(message, error);
+        showToast(toastKey, 'error');
     };
 
     return {
@@ -421,7 +415,7 @@ function useItemsList(listId: string = 'mine') {
 
 interface EditingItemProps {
     item: GroceryItem;
-    onSave: (id: GroceryItem['id'], name: GroceryItem['name']) => Promise<void>;
+    onSave: (id: GroceryItem['id'], name: GroceryItem['name']) => void;
     handleDeleteItem: (id: GroceryItem['id']) => void;
     handleToggleComplete: (id: GroceryItem['id'], currentValue: boolean) => void;
     selectedList: string;
@@ -450,7 +444,7 @@ function EditingItem({
         )).filter(name => name.trim() !== '');
     }, [groceryListData]);
     
-    const saveChanges =  async () => {
+    const saveChanges = () => {
         if (saveInProgress.current)
              return;
 
@@ -460,7 +454,7 @@ function EditingItem({
         if (trimmedName === '') {
             handleDeleteItem(item.id);
         } else if (!reuseExistingItem(trimmedName)) {
-            await onSave(item.id, trimmedName);
+            onSave(item.id, trimmedName);
         }
         
         setTimeout(() => {
