@@ -51,7 +51,7 @@ export const ToastProvider: React.FC<{ children: ReactNode }> = ({ children }) =
                 onClose={handleClose}
                 anchorOrigin={{ vertical: 'bottom', horizontal: 'center' }}
                 slots={{transition: SlideTransition}}
-                sx={{ bottom: { xs: 100, sm: 0 } }}
+                sx={{ bottom: { xs: 100, sm: 32 } }}
             >
                 <Paper
                     elevation={6}
