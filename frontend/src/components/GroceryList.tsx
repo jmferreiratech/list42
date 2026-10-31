@@ -105,8 +105,8 @@ export default function GroceryList({ listId = 'mine' }: { listId?: string }) {
                     variant="fullWidth"
                     sx={{ width: '100%' }}
                 >
-                    <Tab label={`${t('pending')} (${pendingCount})`} id="pending-tab" aria-controls="pending-panel" />
-                    <Tab label={`${t('completed')} (${completedCount})`} id="completed-tab" aria-controls="completed-panel" />
+                    <Tab label={tabLabel(t('pending'), pendingCount, isLoading)} id="pending-tab" aria-controls="pending-panel" />
+                    <Tab label={tabLabel(t('completed'), completedCount, isLoading)} id="completed-tab" aria-controls="completed-panel" />
                 </Tabs>
             </Box>
             {activeTab === 1 && (
@@ -187,6 +187,11 @@ function searchCompletedItems(items: GroceryItem[], search: string): GroceryItem
     return items
         .filter(item => item.completed && normalizeItemName(item.name).includes(query))
         .sort((a, b) => a.name.localeCompare(b.name, 'pt-BR', { sensitivity: 'base' }));
+}
+
+// Counts are hidden while loading, so the tabs never claim an empty list that is still on its way.
+function tabLabel(label: string, count: number, isLoading: boolean): string {
+    return isLoading ? label : `${label} (${count})`;
 }
 
 function emptyMessageKey(activeTab: number, completedSearch: string): string {

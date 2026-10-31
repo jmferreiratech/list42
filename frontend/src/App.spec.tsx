@@ -311,7 +311,9 @@ describe('App', () => {
     const {q} = renderWithProviders(<App />);
 
     expect(await q.findByRole('progressbar', {name: 'loading'})).toBeInTheDocument();
+    expect(q.getByRole('tab', {name: 'pending'})).toBeInTheDocument();
     expect(await q.findByText('emptyPending')).toBeInTheDocument();
+    expect(q.getByRole('tab', {name: 'pending (0)'})).toBeInTheDocument();
   });
 
   it('shows an error and loads the list again on retry', async () => {
