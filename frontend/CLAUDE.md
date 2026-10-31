@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with th
 
 ## Project
 
-List42 ("List For Two") is a shared grocery-list PWA. This is the frontend: React 19 + TypeScript + Vite, MUI v7 (dark theme, primary `#42b883`), Redux Toolkit / RTK Query, `better-auth` for sessions, and i18next (only `pt-BR`). The backend API is reached at `${VITE_BASE_URL}/api`.
+List42 ("List For Two") is a shared grocery-list PWA. This is the frontend: React 19 + TypeScript + Vite, MUI v7 (dark theme, primary `#42b883`), TanStack Query v5, `better-auth` for sessions, and i18next (only `pt-BR`). The backend API is reached at `${VITE_BASE_URL}/api`.
 
 ## Commands
 
@@ -26,16 +26,17 @@ yarn generate-pwa-assets     # regenerate icons in public/ from public/logo.svg
 
 ## Architecture
 
-- **Bootstrap** (`src/main.tsx`): Redux `Provider` (from `setupStore()`) → `AuthProvider` (gives the `better-auth` client through context; read it with `useAuth()`) → `App`. `App.tsx` wraps everything in the theme and `ToastProvider`. It shows `Loading`, then `SignIn` when there is no session, and otherwise the main view. The main view keeps the selected list id in localStorage under the key `${user.id}.selectedListId`.
-- **Config**: `src/settings.ts` is the only place that reads env vars. `settings.baseURL` is `${VITE_BASE_URL}/api` (it already includes `/api`). `api.ts` appends `/lists/` and `auth.ts` appends `/auth`.
-- **Data layer** (`src/api.ts`): one RTK Query API, `groceryApi`. The list id defaults to `'mine'` (the user's own list). The item mutations (`addItem`, `updateItem`, `deleteItem`) do **optimistic updates** on the `getGroceryList` cache in `onQueryStarted`. Each one swaps in the server response when it arrives and undoes the patch if the request fails. They do not invalidate tags. Follow the same pattern for any new item mutation.
-- **Sharing**: `getShareCode` returns a code for the user's own list. Opening the app with `?shared=<code>` makes `ShareCodeRedeemer` POST it to `/lists?shared=`, remove the query param, and switch to the redeemed list.
+- **Bootstrap** (`src/main.tsx`): `QueryClientProvider` (from `createQueryClient()`) → `AuthProvider` (gives the `better-auth` client through context; read it with `useAuth()`) → `App`. `App.tsx` wraps everything in the theme and `ToastProvider`. It shows `Loading`, then `SignIn` when there is no session, and otherwise the main view. The main view keeps the selected list id in localStorage under the key `${user.id}.selectedListId`.
+- **Config**: `src/settings.ts` is the only place that reads env vars. `settings.baseURL` is `${VITE_BASE_URL}/api` (it already includes `/api`). `api.ts` appends `/lists` and `auth.ts` appends `/auth`.
+- **Data layer** (`src/api.ts`): TanStack Query. It exports the query keys (`queryKeys`), query options for `useQuery` / `queryClient.fetchQuery` (`groceryListsQuery`, `groceryListQuery(listId)`, `shareCodeQuery`), and mutation hooks (`useAddItem`, `useUpdateItem`, `useDeleteItem`, `useRedeemShareCode`). The user's own list has the id `'mine'`. `createQueryClient()` sets `staleTime: Infinity` and `retry: false`, so cached data is reused and only the open list refetches: `GroceryList` polls it every 30s (not while the app is in the background) and refetches on focus.
+- **Item mutations** all go through `useItemMutation`, which does **optimistic updates** on the list's cache. `onMutate` cancels in-flight refetches, snapshots the list, and applies the change. `onError` restores the snapshot. Changes to one list share a mutation `scope`, so they are sent one at a time. A server reply is written to the cache only when no other change to that list is still pending (`isMutating(...) === 1`); an earlier reply would hide later changes. `GroceryList` also pauses polling and focus refetches while `useIsSavingItems(listId)` is true. Add any new item mutation through `useItemMutation`.
+- **Sharing**: `shareCodeQuery` fetches a code for the user's own list (`AppBar` calls `queryClient.fetchQuery` on click). Opening the app with `?shared=<code>` makes `ShareCodeRedeemer` POST it to `/lists?shared=`, remove the query param, and switch to the redeemed list.
 - **Item editing** (`GroceryList.tsx`, `useItemsList`): a new item starts as a client-only temp item with an id starting `new-…`. Saving it is what sends `addItem`, with a fresh `cuid2` id. Code uses `id.startsWith('new')` to tell temp items apart. Saving a new item opens another blank one right away. Items are sorted by `updatedAt`, newest first.
 - **UI text**: all user-facing strings are i18n keys in `src/locales/pt-BR/translation.json`, read through `useTranslation().t`.
 
 ## Testing
 
-- Tests are integration-style and render the whole `<App />` through `renderWithProviders` in `src/App.spec.tsx`. That helper creates a real store and auth client, and returns `{ q, user, store }`.
+- Tests are integration-style and render the whole `<App />` through `renderWithProviders` in `src/App.spec.tsx`. That helper creates a fresh `QueryClient` (via `createQueryClient()`) and auth client for each test, and returns `{ q, user, queryClient }`. To simulate the app regaining focus, call `focusManager.setFocused(false)` then `setFocused(true)`; `afterEach` resets it.
 - The HTTP backend (including `/auth/get-session`) is mocked with **MSW** `setupServer`. Override handlers per test with `server.use(...)`, and build URLs from `settings.baseURL`. In tests, `VITE_BASE_URL` is forced to `http://localhost:12345` (`vite.config.ts`).
 - Any request without a matching MSW handler fails the test in `afterEach` (`expect(unhandledRequests).toEqual([])`). Register a handler for every request the test triggers, including follow-up refetches.
 - `vitest.setup.ts` mocks `react-i18next` globally so that `t(key)` returns the key itself. Assert on **i18n keys** (e.g. `findByText('signInMessage')`, `findByLabelText('addItem')`), not on the Portuguese text.
