@@ -1,10 +1,11 @@
 import {useTranslation} from "react-i18next";
-import api from "../api.ts";
+import {useQuery} from "@tanstack/react-query";
+import {groceryListsQuery} from "../api.ts";
 import {FormControl, MenuItem, Select, SelectChangeEvent, Typography} from "@mui/material";
 
 export default function ListSelector({ value, onChange }: { value: string, onChange: (id: string) => void }) {
     const { t } = useTranslation();
-    const { data: lists = [], isLoading } = api.endpoints.listGroceryLists.useQuery();
+    const { data: lists = [], isLoading } = useQuery(groceryListsQuery);
 
     const handleChange = (event: SelectChangeEvent) => {
         onChange(event.target.value);

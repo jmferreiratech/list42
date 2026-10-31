@@ -1,15 +1,14 @@
-import { cleanup, fireEvent, render, RenderOptions, waitFor } from '@testing-library/react';
+import { cleanup, fireEvent, render, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { delay, http, HttpResponse } from 'msw';
 import { setupServer } from 'msw/node';
-import { Provider } from 'react-redux';
+import { focusManager, QueryClientProvider } from '@tanstack/react-query';
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import App from './App';
-import { GroceryItem, groceryApi } from './api';
+import { createQueryClient, GroceryItem } from './api';
 import { setupAuthClient } from './auth';
 import { AuthProvider } from './components/Auth';
 import settings from './settings';
-import { AppStore, RootState, setupStore } from './store';
 import { ReactNode } from 'react';
 
 describe('App', () => {
@@ -413,12 +412,42 @@ describe('App', () => {
       }),
     );
 
-    const {q, store} = renderWithProviders(<App />);
+    const {q} = renderWithProviders(<App />);
     await q.findByText('emptyPending');
-    // RTK Query wires window focus events to the first store only, so dispatch what that listener sends.
-    store.dispatch(groceryApi.internalActions.onFocus());
+    focusManager.setFocused(false);
+    focusManager.setFocused(true);
 
     expect(await q.findByText('Café')).toBeInTheDocument();
+  });
+
+  it('keeps a quickly completed item checked when the reply to an earlier change arrives', async () => {
+    const leite = {id: 'item1', name: 'Leite', completed: false};
+    const pao = {id: 'item2', name: 'Pão', completed: false};
+    mockSignedInUser({items: [leite, pao]});
+    let isPaoSent = false;
+    let sendPaoReply: () => void = () => {};
+    const paoReply = new Promise<void>(resolve => { sendPaoReply = resolve; });
+    server.use(
+      http.put(`${settings.baseURL}/lists/mine/items/item1`, async () => {
+        await delay(400);
+        return HttpResponse.json({id: 'mine', items: [{...leite, completed: true}, pao]});
+      }),
+      http.put(`${settings.baseURL}/lists/mine/items/item2`, async () => {
+        isPaoSent = true;
+        await paoReply;
+        return HttpResponse.json({id: 'mine', items: [{...leite, completed: true}, {...pao, completed: true}]});
+      }),
+    );
+
+    const {q, user} = renderWithProviders(<App />);
+    await user.click(await q.findByRole('checkbox', {name: 'Leite'}));
+    await user.click(q.getByRole('checkbox', {name: 'Pão'}));
+    // Changes to a list are sent one at a time, so Pão goes out only once the reply for Leite is handled.
+    await waitFor(() => expect(isPaoSent).toBe(true));
+
+    expect(q.queryByRole('checkbox', {name: 'Pão'})).not.toBeInTheDocument();
+    sendPaoReply();
+    expect(await q.findByRole('tab', {name: 'completed (2)'})).toBeInTheDocument();
   });
 
   it('lists completed items by name and filters them by search', async () => {
@@ -546,54 +575,29 @@ afterEach(() => {
   cleanup();
   localStorage.clear();
   window.history.replaceState({}, '', '/');
+  focusManager.setFocused(undefined);
   server.resetHandlers();
   expect(unhandledRequests).toEqual([]);
 });
 
 afterAll(() => server.close());
 
-interface ExtendedRenderOptions extends Omit<RenderOptions, 'queries'> {
-  preloadedState?: Partial<RootState>
-  store?: AppStore
-}
-
-export function renderWithProviders(ui: React.ReactElement, extendedRenderOptions: ExtendedRenderOptions = {}) {
-  const {
-    preloadedState = {},
-    store = setupStore(preloadedState),
-    ...renderOptions
-  } = extendedRenderOptions;
-
+export function renderWithProviders(ui: React.ReactElement) {
+  const queryClient = createQueryClient();
   const authClient = setupAuthClient();
 
   function Wrapper({children}: {children: ReactNode}) {
     return (
-      <Provider store={store}>
+      <QueryClientProvider client={queryClient}>
           <AuthProvider client={authClient}>
             {children}
           </AuthProvider>
-      </Provider>
+      </QueryClientProvider>
     );
   }
 
-  const {
-    container,
-    baseElement,
-    debug,
-    rerender,
-    unmount,
-    asFragment,
-    ...queries
-  } = render(ui, {wrapper: Wrapper, ...renderOptions});
   return {
-    store,
+    q: render(ui, {wrapper: Wrapper}),
     user: userEvent.setup(),
-    container,
-    baseElement,
-    debug,
-    rerender,
-    unmount,
-    asFragment,
-    q: queries,
   };
 }

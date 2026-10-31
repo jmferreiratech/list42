@@ -24,7 +24,15 @@ import { useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { TransitionGroup } from "react-transition-group";
-import api, { GroceryItem } from '../api';
+import { useQuery } from '@tanstack/react-query';
+import {
+    GroceryItem,
+    groceryListQuery,
+    useAddItem,
+    useDeleteItem,
+    useIsSavingItems,
+    useUpdateItem,
+} from '../api';
 import { HorizontalSwipeRegion } from './SwipeRegion.tsx';
 import { useToast } from './Toast.tsx';
 
@@ -56,8 +64,8 @@ export default function GroceryList({ listId = 'mine' }: { listId?: string }) {
         }
     };
 
-    const handleSave = async (id: GroceryItem['id'], name: GroceryItem['name']) => {
-        await updateItem(id, { name });
+    const handleSave = (id: GroceryItem['id'], name: GroceryItem['name']) => {
+        updateItem(id, { name });
 
         if (id.startsWith('new')) {
             const newId = addItem();
@@ -291,13 +299,17 @@ function Item({ item, handleToggleComplete, handleDeleteItem, setEditingItemId }
 function useItemsList(listId: string = 'mine') {
     const { showToast } = useToast();
     const [tempItem, setTempItem] = useState<GroceryItem | null>(null);
-    const { data: groceryListData, isLoading, isError, refetch } = api.endpoints.getGroceryList.useQuery(
-        { id: listId },
-        { pollingInterval: LIST_POLLING_INTERVAL_MS, skipPollingIfUnfocused: true, refetchOnFocus: true },
-    );
-    const [addGroceryListItem, { isLoading: isAdding }] = api.endpoints.addItem.useMutation();
-    const [updateGroceryListItem, { isLoading: isUpdating }] = api.endpoints.updateItem.useMutation();
-    const [deleteGroceryListItem, { isLoading: isDeleting }] = api.endpoints.deleteItem.useMutation();
+    const isSavingItems = useIsSavingItems(listId);
+    const { data: groceryListData, isLoading, isError, refetch } = useQuery({
+        ...groceryListQuery(listId),
+        // Paused while changes are being saved, so a refetch can't show the list from before them.
+        // Polling also stops while the app is in the background.
+        refetchInterval: isSavingItems ? false : LIST_POLLING_INTERVAL_MS,
+        refetchOnWindowFocus: isSavingItems ? false : 'always',
+    });
+    const { mutate: addGroceryListItem } = useAddItem(listId);
+    const { mutate: updateGroceryListItem } = useUpdateItem(listId);
+    const { mutate: deleteGroceryListItem } = useDeleteItem(listId);
 
     const savedItems = groceryListData?.items || [];
 
@@ -325,7 +337,7 @@ function useItemsList(listId: string = 'mine') {
         return newItem.id;
     };
 
-    const deleteItem = async (id: GroceryItem['id']) => {
+    const deleteItem = (id: GroceryItem['id']) => {
         if (id.startsWith('new') && tempItem) {
             setTempItem(null);
             return;
@@ -333,27 +345,21 @@ function useItemsList(listId: string = 'mine') {
 
         const itemToDelete = savedItems.find(item => item.id === id);
         if (itemToDelete) {
-            try {
-                await deleteGroceryListItem({ id: listId, item: itemToDelete }).unwrap();
-                showToast('itemDeleted', 'info', { label: 'undo', onClick: () => restoreItem(itemToDelete) });
-            } catch (error) {
-                console.error('Failed to delete item:', error);
-                showToast('deleteItemError', 'error');
-            }
+            deleteGroceryListItem(itemToDelete, {
+                onSuccess: () => showToast('itemDeleted', 'info', { label: 'undo', onClick: () => restoreItem(itemToDelete) }),
+                onError: error => reportError('Failed to delete item:', error, 'deleteItemError'),
+            });
         }
     };
 
     // Saving an item with its original id brings it back, since the API overwrites items by id.
-    const restoreItem = async (item: GroceryItem) => {
-        try {
-            await addGroceryListItem({ id: listId, item }).unwrap();
-        } catch (error) {
-            console.error('Failed to restore item:', error);
-            showToast('addItemError', 'error');
-        }
+    const restoreItem = (item: GroceryItem) => {
+        addGroceryListItem(item, {
+            onError: error => reportError('Failed to restore item:', error, 'addItemError'),
+        });
     };
 
-    const updateItem = async (id: GroceryItem['id'], updates: Partial<Omit<GroceryItem, 'id'>>) => {
+    const updateItem = (id: GroceryItem['id'], updates: Partial<Omit<GroceryItem, 'id'>>) => {
         if (id.startsWith('new') && tempItem) {
             const updatedTempItem = { ...tempItem, ...updates };
 
@@ -365,13 +371,11 @@ function useItemsList(listId: string = 'mine') {
                     id: createId()
                 };
 
-                try {
-                    await addGroceryListItem({ id: listId, item: itemToSave }).unwrap();
-                    setTempItem(null);
-                } catch (error) {
-                    console.error('Failed to add item:', error);
-                    showToast('addItemError', 'error');
-                }
+                // The optimistic update already shows the saved item, so the temp copy can go.
+                setTempItem(null);
+                addGroceryListItem(itemToSave, {
+                    onError: error => reportError('Failed to add item:', error, 'addItemError'),
+                });
             }
             return;
         }
@@ -385,14 +389,16 @@ function useItemsList(listId: string = 'mine') {
             });
 
             if (hasChanged) {
-                try {
-                    await updateGroceryListItem({ id: listId, item: updatedItem }).unwrap();
-                } catch (error) {
-                    console.error('Failed to update item:', error);
-                    showToast('updateItemError', 'error');
-                }
+                updateGroceryListItem(updatedItem, {
+                    onError: error => reportError('Failed to update item:', error, 'updateItemError'),
+                });
             }
         }
+    };
+
+    const reportError = (message: string, error: Error, toastKey: string) => {
+        console.error(message, error);
+        showToast(toastKey, 'error');
     };
 
     return {
@@ -401,15 +407,14 @@ function useItemsList(listId: string = 'mine') {
         updateItem,
         deleteItem,
         isLoading,
-        isUpdating: isAdding || isUpdating || isDeleting,
         hasLoadFailed: isError && !groceryListData,
-        retryLoad: refetch,
+        retryLoad: () => { refetch(); },
     };
 }
 
 interface EditingItemProps {
     item: GroceryItem;
-    onSave: (id: GroceryItem['id'], name: GroceryItem['name']) => Promise<void>;
+    onSave: (id: GroceryItem['id'], name: GroceryItem['name']) => void;
     handleDeleteItem: (id: GroceryItem['id']) => void;
     handleToggleComplete: (id: GroceryItem['id'], currentValue: boolean) => void;
     selectedList: string;
@@ -425,7 +430,7 @@ function EditingItem({
     const { t } = useTranslation();
     const { showToast } = useToast();
     const [currentName, setCurrentName] = useState(item.name);
-    const { data: groceryListData } = api.endpoints.getGroceryList.useQuery({ id: selectedList });
+    const { data: groceryListData } = useQuery(groceryListQuery(selectedList));
     const saveInProgress = useRef(false);
     // The Enter key press that opens this editor from the keyboard ends with a keyup here.
     // Only save on an Enter whose keydown also reached this input.
@@ -438,7 +443,7 @@ function EditingItem({
         )).filter(name => name.trim() !== '');
     }, [groceryListData]);
     
-    const saveChanges =  async () => {
+    const saveChanges = () => {
         if (saveInProgress.current)
              return;
 
@@ -448,7 +453,7 @@ function EditingItem({
         if (trimmedName === '') {
             handleDeleteItem(item.id);
         } else if (!reuseExistingItem(trimmedName)) {
-            await onSave(item.id, trimmedName);
+            onSave(item.id, trimmedName);
         }
         
         setTimeout(() => {
