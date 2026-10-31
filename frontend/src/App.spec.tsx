@@ -236,6 +236,31 @@ describe('App', () => {
     expect(q.queryByLabelText('share')).not.toBeInTheDocument();
   });
 
+  it('shows an error toast when sign in fails', async () => {
+    server.use(
+      http.get(`${settings.baseURL}/auth/get-session`, () => HttpResponse.json(null)),
+      http.post(`${settings.baseURL}/auth/sign-in/social`, () => HttpResponse.json({message: 'boom'}, {status: 500})),
+    );
+
+    const {q, user} = renderWithProviders(<App />);
+    await user.click(await q.findByText('signInWithGoogle'));
+
+    expect(await q.findByText('signInError')).toBeInTheDocument();
+  });
+
+  it('shows an error toast when sign out fails', async () => {
+    mockSignedInUser({items: []});
+    server.use(
+      http.post(`${settings.baseURL}/auth/sign-out`, () => HttpResponse.json({message: 'boom'}, {status: 500})),
+    );
+
+    const {q, user} = renderWithProviders(<App />);
+    await user.click(await q.findByTestId('PersonIcon'));
+    await user.click(await q.findByText('logout'));
+
+    expect(await q.findByText('signOutError')).toBeInTheDocument();
+  });
+
   it('builds the share link from the app base path, dropping the current query and hash', async () => {
     window.history.replaceState({}, '', '/list42/?foo=bar#section');
     mockSignedInUser({items: []});

@@ -11,6 +11,8 @@
   "signInMessage": "Por favor, faça login para criar e gerenciar sua lista de compras.",
   "signInWithGoogle": "Entrar com Google",
   "logout": "Sair",
+  "signInError": "Falha ao entrar. Tente novamente.",
+  "signOutError": "Falha ao sair. Tente novamente.",
   "selectList": "Selecionar Lista",
   "sharedList": "Lista Compartilhada {{id}}",
   "enterItemName": "Digite o nome do item...",
