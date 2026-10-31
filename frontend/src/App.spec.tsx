@@ -385,6 +385,23 @@ describe('App', () => {
     expect(q.getAllByRole('checkbox', {name: 'Ração'})).toHaveLength(1);
   });
 
+  it('suggests only completed items whose words start with the typed text', async () => {
+    mockSignedInUser({items: [
+      {id: 'item1', name: 'Pão de forma', completed: true},
+      {id: 'item2', name: 'Feijão preto', completed: true},
+      {id: 'item3', name: 'Papel toalha', completed: true},
+      {id: 'item4', name: 'Pepino', completed: false},
+    ]});
+
+    const {q, user} = renderWithProviders(<App />);
+    await q.findByText('Pepino');
+    await user.click(q.getByLabelText('addItem'));
+    await user.keyboard('p');
+
+    const options = await q.findAllByRole('option');
+    expect(options.map(option => option.textContent)).toEqual(['Pão de forma', 'Papel toalha', 'Feijão preto']);
+  });
+
   it('shows the list name in the app bar when the user has a single list', async () => {
     mockSignedInUser({items: [], lists: [{id: 'mine', name: 'Minha Lista'}]});
 

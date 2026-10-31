@@ -365,7 +365,7 @@ function EditingItem({
     const suggestions = useMemo(() => {
         if (!groceryListData?.items) return [];
         return Array.from(new Set(
-            groceryListData.items.map(item => item.name)
+            groceryListData.items.filter(item => item.completed).map(item => item.name)
         )).filter(name => name.trim() !== '');
     }, [groceryListData]);
     
@@ -458,6 +458,8 @@ function EditingItem({
                     setCurrentName(newInputValue);
                 }}
                 options={suggestions}
+                // MUI passes an empty inputValue right after the popup opens, because `value` mirrors the typed text.
+                filterOptions={options => filterSuggestions(options, currentName)}
                 renderInput={(params) => (
                     <TextField
                         {...params}
@@ -476,6 +478,18 @@ function EditingItem({
 
         </ListItem>
     );
+}
+
+// Keeps names with a word starting with the typed text, listing names that start with it first.
+function filterSuggestions(names: string[], typed: string): string[] {
+    const query = normalizeItemName(typed);
+    const startsName = (name: string) => normalizeItemName(name).startsWith(query);
+    const startsAWord = (name: string) => normalizeItemName(name).split(/\s+/).some(word => word.startsWith(query));
+
+    return [
+        ...names.filter(startsName),
+        ...names.filter(name => !startsName(name) && startsAWord(name)),
+    ];
 }
 
 function isSameItemName(a: string, b: string): boolean {
