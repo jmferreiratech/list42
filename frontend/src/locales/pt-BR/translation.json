@@ -18,6 +18,7 @@
   "enterItemName": "Digite o nome do item...",
   "addItem": "Adicionar item",
   "deleteItem": "Excluir {{name}}",
+  "editItem": "Editar {{name}}",
   "pending": "Pendentes",
   "completed": "Pronto",
   "swipeToNavigate": "Deslize para navegar entre as abas",

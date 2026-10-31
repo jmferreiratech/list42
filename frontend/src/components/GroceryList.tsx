@@ -9,6 +9,7 @@ import {
     IconButton,
     List,
     ListItem,
+    ListItemButton,
     ListItemText,
     Tab,
     Tabs,
@@ -153,21 +154,24 @@ function Item({ item, handleToggleComplete, handleDeleteItem, setEditingItemId }
             <Checkbox
                 edge="start"
                 checked={item.completed}
-                tabIndex={-1}
                 disableRipple
                 inputProps={{ 'aria-labelledby': `list-item-label-${item.id}` }}
-                onClick={() => handleToggleComplete(item.id)}
+                onChange={() => handleToggleComplete(item.id)}
             />
-            <ListItemText
-                id={`list-item-label-${item.id}`}
-                primary={item.name || <span style={{ fontStyle: 'italic', opacity: 0.6 }}>{t('enterItemName')}</span>}
-                sx={{
-                    textDecoration: item.completed ? 'line-through' : 'none',
-                    color: item.completed ? 'text.secondary' : 'text.primary',
-                    cursor: 'pointer',
-                }}
+            <ListItemButton
+                aria-label={t('editItem', { name: item.name })}
                 onClick={() => setEditingItemId(item.id)}
-            />
+                sx={{ px: 1 }}
+            >
+                <ListItemText
+                    id={`list-item-label-${item.id}`}
+                    primary={item.name || <span style={{ fontStyle: 'italic', opacity: 0.6 }}>{t('enterItemName')}</span>}
+                    sx={{
+                        textDecoration: item.completed ? 'line-through' : 'none',
+                        color: item.completed ? 'text.secondary' : 'text.primary',
+                    }}
+                />
+            </ListItemButton>
         </ListItem>
     );
 }
@@ -295,6 +299,9 @@ function EditingItem({
     const [currentName, setCurrentName] = useState(item.name);
     const { data: groceryListData } = api.endpoints.getGroceryList.useQuery({ id: selectedList });
     const saveInProgress = useRef(false);
+    // The Enter key press that opens this editor from the keyboard ends with a keyup here.
+    // Only save on an Enter whose keydown also reached this input.
+    const enterPressedHere = useRef(false);
 
     const suggestions = useMemo(() => {
         if (!groceryListData?.items) return [];
@@ -327,8 +334,15 @@ function EditingItem({
         }, 100);
     };
 
-    const handleKeyPress = (event: React.KeyboardEvent) => {
+    const handleKeyDown = (event: React.KeyboardEvent) => {
         if (event.key === 'Enter') {
+            enterPressedHere.current = true;
+        }
+    };
+
+    const handleKeyUp = (event: React.KeyboardEvent) => {
+        if (event.key === 'Enter' && enterPressedHere.current) {
+            enterPressedHere.current = false;
             saveChanges();
         }
     };
@@ -390,7 +404,8 @@ function EditingItem({
                             disableUnderline: true
                         }}
                         onBlur={saveChanges}
-                        onKeyUp={handleKeyPress}
+                        onKeyDown={handleKeyDown}
+                        onKeyUp={handleKeyUp}
                         autoFocus
                     />
                 )}

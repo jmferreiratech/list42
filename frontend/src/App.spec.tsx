@@ -264,6 +264,33 @@ describe('App', () => {
     await waitFor(() => expect(q.queryByText('Leite')).not.toBeInTheDocument());
   });
 
+  it('completes an item using only the keyboard', async () => {
+    mockSignedInUser({items: [{id: 'item1', name: 'Leite', completed: false}]});
+    server.use(
+      http.put(`${settings.baseURL}/lists/mine/items/item1`, async ({request}) => {
+        const item = await request.json() as GroceryItem;
+        return HttpResponse.json({id: 'mine', items: [item]});
+      }),
+    );
+
+    const {q, user} = renderWithProviders(<App />);
+    const checkbox = await q.findByRole('checkbox', {name: 'Leite'});
+    checkbox.focus();
+    await user.keyboard(' ');
+
+    await waitFor(() => expect(q.queryByText('Leite')).not.toBeInTheDocument());
+  });
+
+  it('starts editing an item using only the keyboard', async () => {
+    mockSignedInUser({items: [{id: 'item1', name: 'Leite', completed: false}]});
+
+    const {q, user} = renderWithProviders(<App />);
+    (await q.findByRole('button', {name: 'editItem'})).focus();
+    await user.keyboard('{Enter}');
+
+    expect(await q.findByRole('combobox')).toHaveValue('Leite');
+  });
+
   it('shows the list name in the app bar when the user has a single list', async () => {
     mockSignedInUser({items: [], lists: [{id: 'mine', name: 'Minha Lista'}]});
 
