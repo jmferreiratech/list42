@@ -1,10 +1,10 @@
 import {useEffect} from "react";
-import api from "../api.ts";
+import {useRedeemShareCode} from "../api.ts";
 import { useToast } from './Toast.tsx';
 
 export default function ShareCodeRedeemer({ onListRedeemed }: { onListRedeemed: (id: string) => void }) {
     const { showToast } = useToast();
-    const [redeemShareCode] = api.endpoints.redeemShareCode.useMutation();
+    const {mutateAsync: redeemShareCode} = useRedeemShareCode();
 
     useEffect(() => {
         const url = new URL(window.location.href);
@@ -13,7 +13,7 @@ export default function ShareCodeRedeemer({ onListRedeemed }: { onListRedeemed: 
         if (shareCode) {
             (async () => {
                 try {
-                    const response = await redeemShareCode({ shareCode }).unwrap();
+                    const response = await redeemShareCode(shareCode);
                     url.searchParams.delete('shared');
                     window.history.replaceState({}, document.title, url.toString());
                     showToast('shareRedeemSuccess', 'success');
