@@ -36,7 +36,7 @@ yarn generate-pwa-assets     # regenerate icons in public/ from public/logo.svg
 
 ## Testing
 
-- Tests are integration-style and render the whole `<App />` through `renderWithProviders` in `src/App.spec.tsx`. That helper creates a fresh `QueryClient` (via `createQueryClient()`) and auth client for each test, and returns `{ q, user, queryClient }`. To simulate the app regaining focus, call `focusManager.setFocused(false)` then `setFocused(true)`; `afterEach` resets it.
+- Tests are integration-style and render the whole `<App />` through `renderWithProviders` in `src/App.spec.tsx`. That helper creates a fresh `QueryClient` (via `createQueryClient()`) and auth client for each test, and returns `{ q, user }`. To simulate the app regaining focus, call `focusManager.setFocused(false)` then `setFocused(true)`; `afterEach` resets it.
 - The HTTP backend (including `/auth/get-session`) is mocked with **MSW** `setupServer`. Override handlers per test with `server.use(...)`, and build URLs from `settings.baseURL`. In tests, `VITE_BASE_URL` is forced to `http://localhost:12345` (`vite.config.ts`).
 - Any request without a matching MSW handler fails the test in `afterEach` (`expect(unhandledRequests).toEqual([])`). Register a handler for every request the test triggers, including follow-up refetches.
 - `vitest.setup.ts` mocks `react-i18next` globally so that `t(key)` returns the key itself. Assert on **i18n keys** (e.g. `findByText('signInMessage')`, `findByLabelText('addItem')`), not on the Portuguese text.

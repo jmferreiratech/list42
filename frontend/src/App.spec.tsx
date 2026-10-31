@@ -1,8 +1,8 @@
-import { cleanup, fireEvent, render, RenderOptions, waitFor } from '@testing-library/react';
+import { cleanup, fireEvent, render, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { delay, http, HttpResponse } from 'msw';
 import { setupServer } from 'msw/node';
-import { focusManager, QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import { focusManager, QueryClientProvider } from '@tanstack/react-query';
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import App from './App';
 import { createQueryClient, GroceryItem } from './api';
@@ -582,16 +582,8 @@ afterEach(() => {
 
 afterAll(() => server.close());
 
-interface ExtendedRenderOptions extends Omit<RenderOptions, 'queries'> {
-  queryClient?: QueryClient
-}
-
-export function renderWithProviders(ui: React.ReactElement, extendedRenderOptions: ExtendedRenderOptions = {}) {
-  const {
-    queryClient = createQueryClient(),
-    ...renderOptions
-  } = extendedRenderOptions;
-
+export function renderWithProviders(ui: React.ReactElement) {
+  const queryClient = createQueryClient();
   const authClient = setupAuthClient();
 
   function Wrapper({children}: {children: ReactNode}) {
@@ -604,24 +596,8 @@ export function renderWithProviders(ui: React.ReactElement, extendedRenderOption
     );
   }
 
-  const {
-    container,
-    baseElement,
-    debug,
-    rerender,
-    unmount,
-    asFragment,
-    ...queries
-  } = render(ui, {wrapper: Wrapper, ...renderOptions});
   return {
-    queryClient,
+    q: render(ui, {wrapper: Wrapper}),
     user: userEvent.setup(),
-    container,
-    baseElement,
-    debug,
-    rerender,
-    unmount,
-    asFragment,
-    q: queries,
   };
 }
