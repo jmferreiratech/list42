@@ -5,6 +5,7 @@ import { setupServer } from 'msw/node';
 import { Provider } from 'react-redux';
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import App from './App';
+import { GroceryItem } from './api';
 import { setupAuthClient } from './auth';
 import { AuthProvider } from './components/Auth';
 import settings from './settings';
@@ -221,7 +222,37 @@ describe('App', () => {
 
     expect(await q.findByText('Leite')).toBeInTheDocument();
   });
+
+  it('hides the share button on a list shared with the user', async () => {
+    localStorage.setItem('foo.selectedListId', JSON.stringify('shared-list'));
+    mockSignedInUser({
+      items: [{id: 'item1', name: 'Leite', completed: false}],
+      lists: [{id: 'mine', name: 'Minha Lista'}, {id: 'shared-list', name: 'Lista da Ana'}],
+    });
+
+    const {q} = renderWithProviders(<App />);
+    await q.findByText('Leite');
+
+    expect(q.queryByLabelText('share')).not.toBeInTheDocument();
+  });
 });
+
+interface MockSignedInUserOptions {
+  items: GroceryItem[];
+  lists?: {id: string; name: string}[];
+}
+
+function mockSignedInUser({items, lists = [{id: 'mine', name: 'Minha Lista'}]}: MockSignedInUserOptions) {
+  server.use(
+    http.get(`${settings.baseURL}/auth/get-session`, () => {
+      return HttpResponse.json({user: {id: 'foo'}, session: {}});
+    }),
+    http.get(`${settings.baseURL}/lists`, () => HttpResponse.json(lists)),
+    http.get(`${settings.baseURL}/lists/:listId`, ({params}) => {
+      return HttpResponse.json({id: params.listId, name: 'Minha Lista', items});
+    }),
+  );
+}
 
 const server = setupServer();
 
@@ -239,6 +270,7 @@ beforeEach(() => {
 
 afterEach(() => {
   cleanup();
+  localStorage.clear();
   server.resetHandlers();
   expect(unhandledRequests).toEqual([]);
 });

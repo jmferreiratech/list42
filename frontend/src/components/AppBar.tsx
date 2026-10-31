@@ -33,7 +33,7 @@ export default function AppBar({ selectedListId, onListChange }: {
                     </Box>
 
                     <Box sx={{ display: 'flex', alignItems: 'center', flexShrink: 0 }}>
-                        <ShareButton disabled={selectedListId !== 'mine'} />
+                        {selectedListId === 'mine' && <ShareButton />}
                         <UserMenu />
                     </Box>
                 </Toolbar>
@@ -56,7 +56,7 @@ function HideOnScroll(props: {children: React.ReactElement}) {
     );
 }
 
-function ShareButton({ disabled = false }: { disabled?: boolean }) {
+function ShareButton() {
     const { t } = useTranslation();
     const { showToast } = useToast();
     const [trigger] = api.endpoints.getShareCode.useLazyQuery();
@@ -105,24 +105,13 @@ function ShareButton({ disabled = false }: { disabled?: boolean }) {
             });
     };
 
-    const handleClick = () => {
-        if (disabled) {
-            showToast('shareOwnListOnly', 'warning');
-        } else {
-            handleShare();
-        }
-    };
-
     return (
-        <Box onClick={handleClick} sx={{ display: 'inline-flex', cursor: disabled ? 'not-allowed' : 'pointer' }}>
-            <IconButton
-                color="primary"
-                aria-label={t('share')}
-                disabled={disabled}
-                sx={{ pointerEvents: 'none' }}
-            >
-                <ShareIcon />
-            </IconButton>
-        </Box>
+        <IconButton
+            color="primary"
+            aria-label={t('share')}
+            onClick={handleShare}
+        >
+            <ShareIcon />
+        </IconButton>
     );
 }
