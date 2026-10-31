@@ -249,6 +249,21 @@ describe('App', () => {
     expect(await q.findByRole('checkbox', {name: 'Leite'})).not.toBeChecked();
   });
 
+  it('deletes an item from its labeled delete button', async () => {
+    mockSignedInUser({items: [{id: 'item1', name: 'Leite', completed: false}]});
+    server.use(
+      http.delete(`${settings.baseURL}/lists/mine/items/item1`, () => {
+        return HttpResponse.json({id: 'mine', items: []});
+      }),
+    );
+
+    const {q, user} = renderWithProviders(<App />);
+    await q.findByText('Leite');
+    await user.click(q.getByRole('button', {name: 'deleteItem'}));
+
+    await waitFor(() => expect(q.queryByText('Leite')).not.toBeInTheDocument());
+  });
+
   it('shows the list name in the app bar when the user has a single list', async () => {
     mockSignedInUser({items: [], lists: [{id: 'mine', name: 'Minha Lista'}]});
 

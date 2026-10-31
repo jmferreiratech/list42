@@ -142,7 +142,7 @@ function Item({ item, handleToggleComplete, handleDeleteItem, setEditingItemId }
             secondaryAction={
                 <IconButton
                     edge="end"
-                    aria-label="delete"
+                    aria-label={t('deleteItem', { name: item.name })}
                     onClick={() => handleDeleteItem(item.id)}
                 >
                     <DeleteIcon />
@@ -291,6 +291,7 @@ function EditingItem({
     handleToggleComplete,
     selectedList,
 }: EditingItemProps) {
+    const { t } = useTranslation();
     const [currentName, setCurrentName] = useState(item.name);
     const { data: groceryListData } = api.endpoints.getGroceryList.useQuery({ id: selectedList });
     const saveInProgress = useRef(false);
@@ -349,7 +350,7 @@ function EditingItem({
             secondaryAction={
                 <IconButton
                     edge="end"
-                    aria-label="delete"
+                    aria-label={t('deleteItem', { name: item.name })}
                     onClick={() => handleDeleteItem(item.id)}
                     disabled
                 >
