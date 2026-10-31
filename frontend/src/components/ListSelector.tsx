@@ -1,6 +1,6 @@
 import {useTranslation} from "react-i18next";
 import api from "../api.ts";
-import {FormControl, MenuItem, Select, SelectChangeEvent} from "@mui/material";
+import {FormControl, MenuItem, Select, SelectChangeEvent, Typography} from "@mui/material";
 
 export default function ListSelector({ value, onChange }: { value: string, onChange: (id: string) => void }) {
     const { t } = useTranslation();
@@ -10,8 +10,16 @@ export default function ListSelector({ value, onChange }: { value: string, onCha
         onChange(event.target.value);
     };
 
-    if (isLoading || lists.length <= 1) {
+    if (isLoading) {
         return null;
+    }
+
+    if (lists.length <= 1) {
+        return (
+            <Typography variant="h6" component="h1" noWrap>
+                {lists[0]?.name || t('appName')}
+            </Typography>
+        );
     }
 
     return (

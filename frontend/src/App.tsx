@@ -1,4 +1,4 @@
-import {Container, CssBaseline} from '@mui/material';
+import {Box, Container, CssBaseline} from '@mui/material';
 import {createTheme, ThemeProvider} from '@mui/material/styles';
 import {type Session} from './auth';
 import AppBar from "./components/AppBar.tsx";
@@ -48,10 +48,28 @@ function InternalApp({user}: {user: Session['user']}) {
     const [selectedListId, setSelectedListId] = useLocalStorage(`${user.id}.selectedListId`, 'mine');
 
     return (
-        <Container maxWidth="sm" sx={{mt: 2, pb: 10}}>
+        <Container maxWidth="sm" sx={{mt: 2, pb: 14}}>
             <ShareCodeRedeemer onListRedeemed={setSelectedListId} />
             <AppBar selectedListId={selectedListId} onListChange={setSelectedListId} />
-            <GroceryList listId={selectedListId} />
+            <ListCard>
+                <GroceryList listId={selectedListId} />
+            </ListCard>
         </Container>
     )
+}
+
+// On wider screens the list is a narrow column, so a card sets it apart from the page.
+function ListCard({children}: {children: React.ReactNode}) {
+    return (
+        <Box sx={{
+            border: {sm: 1},
+            borderColor: {sm: 'divider'},
+            borderRadius: {sm: 2},
+            bgcolor: {sm: 'background.paper'},
+            px: {sm: 2},
+            pb: {sm: 1},
+        }}>
+            {children}
+        </Box>
+    );
 }

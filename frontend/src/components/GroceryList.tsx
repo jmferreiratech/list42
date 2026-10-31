@@ -3,16 +3,21 @@ import DeleteIcon from '@mui/icons-material/Delete';
 import {
     Autocomplete,
     Box,
+    Button,
     Checkbox,
+    CircularProgress,
     Collapse,
     Fab,
     IconButton,
     List,
     ListItem,
+    ListItemButton,
     ListItemText,
+    Slide,
     Tab,
     Tabs,
-    TextField
+    TextField,
+    Typography
 } from '@mui/material';
 import { createId } from '@paralleldrive/cuid2';
 import { useMemo, useRef, useState } from 'react';
@@ -23,15 +28,25 @@ import api, { GroceryItem } from '../api';
 import { HorizontalSwipeRegion } from './SwipeRegion.tsx';
 import { useToast } from './Toast.tsx';
 
+// Picks up changes made by the other person on a shared list.
+const LIST_POLLING_INTERVAL_MS = 30_000;
+
 export default function GroceryList({ listId = 'mine' }: { listId?: string }) {
     const { t } = useTranslation();
     const [editingItemId, setEditingItemId] = useState<GroceryItem['id'] | null>(null);
     const [activeTab, setActiveTab] = useState(0);
+    // Only animate the list once the user switches tabs, not when it first appears.
+    const hasSwitchedTab = useRef(false);
+    const tabRegionRef = useRef<HTMLDivElement>(null);
+    const [completedSearch, setCompletedSearch] = useState('');
     const {
         items,
         addItem,
         updateItem,
         deleteItem,
+        isLoading,
+        hasLoadFailed,
+        retryLoad,
     } = useItemsList(listId);
 
     const handleDelete = (id: GroceryItem['id']) => {
@@ -55,7 +70,7 @@ export default function GroceryList({ listId = 'mine' }: { listId?: string }) {
     const handleAdd = () => {
         const newId = addItem();
         setEditingItemId(newId);
-        setActiveTab(0);
+        switchTab(0);
     };
 
     const handleToggle = (id: GroceryItem['id'], completed: GroceryItem['completed']) => {
@@ -64,13 +79,21 @@ export default function GroceryList({ listId = 'mine' }: { listId?: string }) {
             setEditingItemId(null);
     };
 
-    const handleTabChange = (_: React.SyntheticEvent, newValue: number) => {
-        setActiveTab(newValue);
+    const switchTab = (tab: number) => {
+        hasSwitchedTab.current = true;
+        setActiveTab(tab);
     };
 
-    const filteredItems = items.filter(item =>
-        activeTab === 0 ? !item.completed : item.completed
-    );
+    const handleTabChange = (_: React.SyntheticEvent, newValue: number) => {
+        switchTab(newValue);
+    };
+
+    const filteredItems = activeTab === 0
+        ? items.filter(item => !item.completed)
+        : searchCompletedItems(items, completedSearch);
+    const savedItems = items.filter(item => !item.id.startsWith('new'));
+    const pendingCount = savedItems.filter(item => !item.completed).length;
+    const completedCount = savedItems.length - pendingCount;
 
     return (
         <>
@@ -82,38 +105,69 @@ export default function GroceryList({ listId = 'mine' }: { listId?: string }) {
                     variant="fullWidth"
                     sx={{ width: '100%' }}
                 >
-                    <Tab label={t('pending')} id="pending-tab" aria-controls="pending-panel" />
-                    <Tab label={t('completed')} id="completed-tab" aria-controls="completed-panel" />
+                    <Tab label={tabLabel(t('pending'), pendingCount, isLoading)} id="pending-tab" aria-controls="pending-panel" />
+                    <Tab label={tabLabel(t('completed'), completedCount, isLoading)} id="completed-tab" aria-controls="completed-panel" />
                 </Tabs>
             </Box>
-            <HorizontalSwipeRegion onChange={val => setActiveTab(val === 'left' ? 1 : 0)}>
-                <List>
-                    <TransitionGroup>
-                        {filteredItems.map((item) => (
-                            <Collapse key={item.id}>
-                                {
-                                    editingItemId === item.id ? (
-                                        <EditingItem
-                                            item={item}
-                                            onSave={handleSave}
-                                            handleDeleteItem={handleDelete}
-                                            handleToggleComplete={(id, value) => handleToggle(id, value)}
-                                            selectedList={listId}
-                                        />
-                                    ) : (
-                                        <Item
-                                            item={item}
-                                            handleToggleComplete={() => handleToggle(item.id, item.completed)}
-                                            handleDeleteItem={handleDelete}
-                                            setEditingItemId={setEditingItemId}
-                                        />
-                                    )
-                                }
-                            </Collapse>
-                        ))}
-                    </TransitionGroup>
-                </List>
-            </HorizontalSwipeRegion>
+            {activeTab === 1 && (
+                <TextField
+                    type="search"
+                    size="small"
+                    sx={{ mb: 1 }}
+                    fullWidth
+                    value={completedSearch}
+                    onChange={event => setCompletedSearch(event.target.value)}
+                    placeholder={t('searchCompleted')}
+                    slotProps={{ htmlInput: { 'aria-label': t('searchCompleted') } }}
+                />
+            )}
+            <Box ref={tabRegionRef} sx={{ overflow: 'hidden' }}>
+                <HorizontalSwipeRegion onChange={val => switchTab(val === 'left' ? 1 : 0)}>
+                    <Slide
+                        key={activeTab}
+                        in
+                        appear={hasSwitchedTab.current}
+                        direction={activeTab === 1 ? 'left' : 'right'}
+                        container={tabRegionRef.current}
+                    >
+                        <Box>
+                            <ListStatus
+                                isLoading={isLoading}
+                                hasLoadFailed={hasLoadFailed}
+                                isEmpty={filteredItems.length === 0}
+                                emptyMessage={t(emptyMessageKey(activeTab, completedSearch))}
+                                onRetry={retryLoad}
+                            />
+                            <List>
+                                <TransitionGroup>
+                                    {filteredItems.map((item) => (
+                                        <Collapse key={item.id}>
+                                            {
+                                                editingItemId === item.id ? (
+                                                    <EditingItem
+                                                        item={item}
+                                                        onSave={handleSave}
+                                                        handleDeleteItem={handleDelete}
+                                                        handleToggleComplete={(id, value) => handleToggle(id, value)}
+                                                        selectedList={listId}
+                                                    />
+                                                ) : (
+                                                    <Item
+                                                        item={item}
+                                                        handleToggleComplete={() => handleToggle(item.id, item.completed)}
+                                                        handleDeleteItem={handleDelete}
+                                                        setEditingItemId={setEditingItemId}
+                                                    />
+                                                )
+                                            }
+                                        </Collapse>
+                                    ))}
+                                </TransitionGroup>
+                            </List>
+                        </Box>
+                    </Slide>
+                </HorizontalSwipeRegion>
+            </Box>
             <Fab
                 color="primary"
                 aria-label={t('addItem')}
@@ -127,6 +181,65 @@ export default function GroceryList({ listId = 'mine' }: { listId?: string }) {
     )
 }
 
+// Completed items act as a history, so they are listed by name instead of by date.
+function searchCompletedItems(items: GroceryItem[], search: string): GroceryItem[] {
+    const query = normalizeItemName(search);
+    return items
+        .filter(item => item.completed && normalizeItemName(item.name).includes(query))
+        .sort((a, b) => a.name.localeCompare(b.name, 'pt-BR', { sensitivity: 'base' }));
+}
+
+// Counts are hidden while loading, so the tabs never claim an empty list that is still on its way.
+function tabLabel(label: string, count: number, isLoading: boolean): string {
+    return isLoading ? label : `${label} (${count})`;
+}
+
+function emptyMessageKey(activeTab: number, completedSearch: string): string {
+    if (activeTab === 0) {
+        return 'emptyPending';
+    }
+    return completedSearch.trim() === '' ? 'emptyCompleted' : 'noSearchResults';
+}
+
+interface ListStatusProps {
+    isLoading: boolean;
+    hasLoadFailed: boolean;
+    isEmpty: boolean;
+    emptyMessage: string;
+    onRetry: () => void;
+}
+
+function ListStatus({ isLoading, hasLoadFailed, isEmpty, emptyMessage, onRetry }: ListStatusProps) {
+    const { t } = useTranslation();
+
+    if (isLoading) {
+        return (
+            <Box sx={{ display: 'flex', justifyContent: 'center', py: 4 }}>
+                <CircularProgress aria-label={t('loading')} />
+            </Box>
+        );
+    }
+
+    if (hasLoadFailed) {
+        return (
+            <Box role="alert" sx={{ textAlign: 'center', py: 4 }}>
+                <Typography sx={{ mb: 2 }}>{t('loadListError')}</Typography>
+                <Button variant="outlined" onClick={onRetry}>{t('retry')}</Button>
+            </Box>
+        );
+    }
+
+    if (isEmpty) {
+        return (
+            <Typography color="text.secondary" sx={{ textAlign: 'center', py: 4 }}>
+                {emptyMessage}
+            </Typography>
+        );
+    }
+
+    return null;
+}
+
 interface ItemProps {
     item: GroceryItem;
     handleToggleComplete: (id: GroceryItem['id']) => void;
@@ -136,21 +249,13 @@ interface ItemProps {
 
 function Item({ item, handleToggleComplete, handleDeleteItem, setEditingItemId }: ItemProps) {
     const { t } = useTranslation();
-    const [checked, setChecked] = useState<boolean>(item.completed);
-
-    const handleChecked = () => {
-        setChecked(val => {
-            setTimeout(() => handleToggleComplete(item.id), 0);
-            return !val;
-        })
-    };
 
     return (
         <ListItem
             secondaryAction={
                 <IconButton
                     edge="end"
-                    aria-label="delete"
+                    aria-label={t('deleteItem', { name: item.name })}
                     onClick={() => handleDeleteItem(item.id)}
                 >
                     <DeleteIcon />
@@ -160,22 +265,25 @@ function Item({ item, handleToggleComplete, handleDeleteItem, setEditingItemId }
         >
             <Checkbox
                 edge="start"
-                checked={checked}
-                tabIndex={-1}
+                checked={item.completed}
                 disableRipple
                 inputProps={{ 'aria-labelledby': `list-item-label-${item.id}` }}
-                onClick={handleChecked}
+                onChange={() => handleToggleComplete(item.id)}
             />
-            <ListItemText
-                id={`list-item-label-${item.id}`}
-                primary={item.name || <span style={{ fontStyle: 'italic', opacity: 0.6 }}>{t('enterItemName')}</span>}
-                sx={{
-                    textDecoration: item.completed ? 'line-through' : 'none',
-                    color: item.completed ? 'text.secondary' : 'text.primary',
-                    cursor: 'pointer',
-                }}
+            <ListItemButton
+                aria-label={t('editItem', { name: item.name })}
                 onClick={() => setEditingItemId(item.id)}
-            />
+                sx={{ px: 1 }}
+            >
+                <ListItemText
+                    id={`list-item-label-${item.id}`}
+                    primary={item.name || <span style={{ fontStyle: 'italic', opacity: 0.6 }}>{t('enterItemName')}</span>}
+                    sx={{
+                        textDecoration: item.completed ? 'line-through' : 'none',
+                        color: item.completed ? 'text.secondary' : 'text.primary',
+                    }}
+                />
+            </ListItemButton>
         </ListItem>
     );
 }
@@ -183,7 +291,10 @@ function Item({ item, handleToggleComplete, handleDeleteItem, setEditingItemId }
 function useItemsList(listId: string = 'mine') {
     const { showToast } = useToast();
     const [tempItem, setTempItem] = useState<GroceryItem | null>(null);
-    const { data: groceryListData, isLoading, isError } = api.endpoints.getGroceryList.useQuery({ id: listId });
+    const { data: groceryListData, isLoading, isError, refetch } = api.endpoints.getGroceryList.useQuery(
+        { id: listId },
+        { pollingInterval: LIST_POLLING_INTERVAL_MS, skipPollingIfUnfocused: true, refetchOnFocus: true },
+    );
     const [addGroceryListItem, { isLoading: isAdding }] = api.endpoints.addItem.useMutation();
     const [updateGroceryListItem, { isLoading: isUpdating }] = api.endpoints.updateItem.useMutation();
     const [deleteGroceryListItem, { isLoading: isDeleting }] = api.endpoints.deleteItem.useMutation();
@@ -224,10 +335,21 @@ function useItemsList(listId: string = 'mine') {
         if (itemToDelete) {
             try {
                 await deleteGroceryListItem({ id: listId, item: itemToDelete }).unwrap();
+                showToast('itemDeleted', 'info', { label: 'undo', onClick: () => restoreItem(itemToDelete) });
             } catch (error) {
                 console.error('Failed to delete item:', error);
                 showToast('deleteItemError', 'error');
             }
+        }
+    };
+
+    // Saving an item with its original id brings it back, since the API overwrites items by id.
+    const restoreItem = async (item: GroceryItem) => {
+        try {
+            await addGroceryListItem({ id: listId, item }).unwrap();
+        } catch (error) {
+            console.error('Failed to restore item:', error);
+            showToast('addItemError', 'error');
         }
     };
 
@@ -280,7 +402,8 @@ function useItemsList(listId: string = 'mine') {
         deleteItem,
         isLoading,
         isUpdating: isAdding || isUpdating || isDeleting,
-        isError,
+        hasLoadFailed: isError && !groceryListData,
+        retryLoad: refetch,
     };
 }
 
@@ -299,14 +422,19 @@ function EditingItem({
     handleToggleComplete,
     selectedList,
 }: EditingItemProps) {
+    const { t } = useTranslation();
+    const { showToast } = useToast();
     const [currentName, setCurrentName] = useState(item.name);
     const { data: groceryListData } = api.endpoints.getGroceryList.useQuery({ id: selectedList });
     const saveInProgress = useRef(false);
+    // The Enter key press that opens this editor from the keyboard ends with a keyup here.
+    // Only save on an Enter whose keydown also reached this input.
+    const enterPressedHere = useRef(false);
 
     const suggestions = useMemo(() => {
         if (!groceryListData?.items) return [];
         return Array.from(new Set(
-            groceryListData.items.map(item => item.name)
+            groceryListData.items.filter(item => item.completed).map(item => item.name)
         )).filter(name => name.trim() !== '');
     }, [groceryListData]);
     
@@ -319,14 +447,8 @@ function EditingItem({
         const trimmedName = currentName.trim();
         if (trimmedName === '') {
             handleDeleteItem(item.id);
-        } else {
-            const existingItem = groceryListData?.items.find(i => i.name.trim().toLocaleLowerCase() === trimmedName.toLocaleLowerCase() && i.completed);
-            if (existingItem) {
-                handleToggleComplete(existingItem.id, existingItem.completed);
-                setCurrentName('');
-            } else {
-                await onSave(item.id, trimmedName);
-            }
+        } else if (!reuseExistingItem(trimmedName)) {
+            await onSave(item.id, trimmedName);
         }
         
         setTimeout(() => {
@@ -334,8 +456,15 @@ function EditingItem({
         }, 100);
     };
 
-    const handleKeyPress = (event: React.KeyboardEvent) => {
+    const handleKeyDown = (event: React.KeyboardEvent) => {
         if (event.key === 'Enter') {
+            enterPressedHere.current = true;
+        }
+    };
+
+    const handleKeyUp = (event: React.KeyboardEvent) => {
+        if (event.key === 'Enter' && enterPressedHere.current) {
+            enterPressedHere.current = false;
             saveChanges();
         }
     };
@@ -343,13 +472,25 @@ function EditingItem({
     const handleAutocompleteChange = (_: React.SyntheticEvent, value: string | null) => {
         if (value) {
             setCurrentName(value);
-
-            const existingItem = groceryListData?.items.find(i => i.name === value && i.completed);
-            if (existingItem) {
-                handleToggleComplete(existingItem.id, existingItem.completed);
-                setCurrentName('');
-            }
+            reuseExistingItem(value);
         }
+    };
+
+    // Returns whether another item already has this name, ignoring case and accents.
+    // A completed match goes back to pending instead of creating a duplicate.
+    const reuseExistingItem = (name: string): boolean => {
+        const existingItem = groceryListData?.items.find(i => i.id !== item.id && isSameItemName(i.name, name));
+        if (!existingItem) {
+            return false;
+        }
+
+        if (existingItem.completed) {
+            handleToggleComplete(existingItem.id, existingItem.completed);
+        } else {
+            showToast('itemAlreadyPending', 'info');
+        }
+        setCurrentName('');
+        return true;
     };
 
     return (
@@ -357,7 +498,7 @@ function EditingItem({
             secondaryAction={
                 <IconButton
                     edge="end"
-                    aria-label="delete"
+                    aria-label={t('deleteItem', { name: item.name })}
                     onClick={() => handleDeleteItem(item.id)}
                     disabled
                 >
@@ -386,18 +527,18 @@ function EditingItem({
                     setCurrentName(newInputValue);
                 }}
                 options={suggestions}
+                // MUI passes an empty inputValue right after the popup opens, because `value` mirrors the typed text.
+                filterOptions={options => filterSuggestions(options, currentName)}
                 renderInput={(params) => (
                     <TextField
                         {...params}
                         variant="standard"
                         fullWidth
+                        placeholder={t('enterItemName')}
                         sx={{ ml: 1 }}
-                        InputProps={{
-                            ...params.InputProps,
-                            disableUnderline: true
-                        }}
                         onBlur={saveChanges}
-                        onKeyUp={handleKeyPress}
+                        onKeyDown={handleKeyDown}
+                        onKeyUp={handleKeyUp}
                         autoFocus
                     />
                 )}
@@ -406,4 +547,24 @@ function EditingItem({
 
         </ListItem>
     );
+}
+
+// Keeps names with a word starting with the typed text, listing names that start with it first.
+function filterSuggestions(names: string[], typed: string): string[] {
+    const query = normalizeItemName(typed);
+    const startsName = (name: string) => normalizeItemName(name).startsWith(query);
+    const startsAWord = (name: string) => normalizeItemName(name).split(/\s+/).some(word => word.startsWith(query));
+
+    return [
+        ...names.filter(startsName),
+        ...names.filter(name => !startsName(name) && startsAWord(name)),
+    ];
+}
+
+function isSameItemName(a: string, b: string): boolean {
+    return normalizeItemName(a) === normalizeItemName(b);
+}
+
+function normalizeItemName(name: string): string {
+    return name.trim().normalize('NFD').replace(/\p{Diacritic}/gu, '').toLocaleLowerCase('pt-BR');
 }

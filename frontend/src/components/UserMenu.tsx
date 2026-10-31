@@ -2,11 +2,13 @@ import { useState } from 'react';
 import { Button, Menu, MenuItem, Avatar, Typography, Box } from '@mui/material';
 import { useTranslation } from 'react-i18next';
 import { useAuth } from './Auth.tsx';
+import { useToast } from './Toast.tsx';
 
 export default function UserMenu() {
     const { t } = useTranslation();
     const [anchorEl, setAnchorEl] = useState<null | HTMLElement>(null);
     const authClient = useAuth();
+    const { showToast } = useToast();
     const {data, isPending} = authClient.useSession()
 
     if (isPending || !data)
@@ -26,11 +28,14 @@ export default function UserMenu() {
 
     const handleLogout = async () => {
         try {
-            await authClient.signOut();
+            const { error } = await authClient.signOut();
+            if (error) {
+                throw error;
+            }
             handleClose();
         } catch (error) {
-            // ToDo: tratar tentativa de deslogar sem cookie (sessão)
             console.error('Logout failed:', error);
+            showToast('signOutError', 'error');
         }
     };
 

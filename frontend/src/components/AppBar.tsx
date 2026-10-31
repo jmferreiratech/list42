@@ -2,6 +2,7 @@ import {AppBar as MuiAppBar, Box, IconButton, Slide, Toolbar, useScrollTrigger} 
 import ShareIcon from '@mui/icons-material/Share';
 import {useTranslation} from 'react-i18next';
 import api from "../api";
+import settings from "../settings";
 import UserMenu from "./UserMenu.tsx";
 import ListSelector from "./ListSelector.tsx";
 import { useToast } from './Toast.tsx';
@@ -33,7 +34,7 @@ export default function AppBar({ selectedListId, onListChange }: {
                     </Box>
 
                     <Box sx={{ display: 'flex', alignItems: 'center', flexShrink: 0 }}>
-                        <ShareButton disabled={selectedListId !== 'mine'} />
+                        {selectedListId === 'mine' && <ShareButton />}
                         <UserMenu />
                     </Box>
                 </Toolbar>
@@ -56,7 +57,7 @@ function HideOnScroll(props: {children: React.ReactElement}) {
     );
 }
 
-function ShareButton({ disabled = false }: { disabled?: boolean }) {
+function ShareButton() {
     const { t } = useTranslation();
     const { showToast } = useToast();
     const [trigger] = api.endpoints.getShareCode.useLazyQuery();
@@ -76,7 +77,7 @@ function ShareButton({ disabled = false }: { disabled?: boolean }) {
             return;
         }
 
-        const link = `${window.location.href}?shared=${shareCode}`;
+        const link = buildShareLink(shareCode);
 
         if (navigator.share) {
             try {
@@ -105,24 +106,19 @@ function ShareButton({ disabled = false }: { disabled?: boolean }) {
             });
     };
 
-    const handleClick = () => {
-        if (disabled) {
-            showToast('shareOwnListOnly', 'warning');
-        } else {
-            handleShare();
-        }
-    };
-
     return (
-        <Box onClick={handleClick} sx={{ display: 'inline-flex', cursor: disabled ? 'not-allowed' : 'pointer' }}>
-            <IconButton
-                color="primary"
-                aria-label={t('share')}
-                disabled={disabled}
-                sx={{ pointerEvents: 'none' }}
-            >
-                <ShareIcon />
-            </IconButton>
-        </Box>
+        <IconButton
+            color="primary"
+            aria-label={t('share')}
+            onClick={handleShare}
+        >
+            <ShareIcon />
+        </IconButton>
     );
+}
+
+function buildShareLink(shareCode: string): string {
+    const url = new URL(settings.appBasePath, window.location.origin);
+    url.searchParams.set('shared', shareCode);
+    return url.toString();
 }
