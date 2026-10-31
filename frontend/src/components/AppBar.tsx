@@ -1,8 +1,7 @@
 import {AppBar as MuiAppBar, Box, IconButton, Slide, Toolbar, useScrollTrigger} from "@mui/material";
 import ShareIcon from '@mui/icons-material/Share';
 import {useTranslation} from 'react-i18next';
-import {useQueryClient} from "@tanstack/react-query";
-import {shareCodeQuery} from "../api";
+import {fetchShareCode} from "../api";
 import settings from "../settings";
 import UserMenu from "./UserMenu.tsx";
 import ListSelector from "./ListSelector.tsx";
@@ -61,12 +60,10 @@ function HideOnScroll(props: {children: React.ReactElement}) {
 function ShareButton() {
     const { t } = useTranslation();
     const { showToast } = useToast();
-    const queryClient = useQueryClient();
-
     const handleShare = async () => {
         let shareCode: string | null = null;
         try {
-            shareCode = await queryClient.fetchQuery(shareCodeQuery);
+            shareCode = await fetchShareCode();
         } catch (error) {
             console.error('Failed to get share code:', error);
             showToast('shareCodeError', 'error');

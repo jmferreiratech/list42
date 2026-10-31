@@ -29,7 +29,6 @@ interface GroceryListSummary {
 export const queryKeys = {
     groceryLists: ['groceryLists'] as const,
     groceryList: (listId: string) => ['groceryList', listId] as const,
-    shareCode: ['shareCode'] as const,
 };
 
 export function createQueryClient(): QueryClient {
@@ -53,11 +52,10 @@ export function groceryListQuery(listId: string) {
     });
 }
 
-export const shareCodeQuery = queryOptions({
-    queryKey: queryKeys.shareCode,
-    queryFn: ({ signal }) => request<string>('/mine/share-code', { signal }),
-    staleTime: 0,
-});
+// Each share asks for a new code, so it is not cached.
+export function fetchShareCode(): Promise<string> {
+    return request<string>('/mine/share-code');
+}
 
 // True while any item change to this list is still being saved.
 export function useIsSavingItems(listId: string): boolean {
