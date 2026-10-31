@@ -66,6 +66,7 @@ function ListCard({children}: {children: React.ReactNode}) {
             borderColor: {sm: 'divider'},
             borderRadius: {sm: 2},
             bgcolor: {sm: 'background.paper'},
+            px: {sm: 2},
             pb: {sm: 1},
         }}>
             {children}

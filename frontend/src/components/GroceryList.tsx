@@ -113,6 +113,7 @@ export default function GroceryList({ listId = 'mine' }: { listId?: string }) {
                 <TextField
                     type="search"
                     size="small"
+                    sx={{ mb: 1 }}
                     fullWidth
                     value={completedSearch}
                     onChange={event => setCompletedSearch(event.target.value)}
