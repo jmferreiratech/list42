@@ -419,6 +419,26 @@ describe('App', () => {
     expect(await q.findByText('Café')).toBeInTheDocument();
   });
 
+  it('lists completed items by name and filters them by search', async () => {
+    mockSignedInUser({items: [
+      {id: 'item1', name: 'Pão', completed: true, updatedAt: '2026-10-30T10:00:00Z'},
+      {id: 'item2', name: 'Açúcar', completed: true, updatedAt: '2026-10-29T10:00:00Z'},
+      {id: 'item3', name: 'Leite', completed: true, updatedAt: '2026-10-31T10:00:00Z'},
+    ]});
+
+    const {q, user} = renderWithProviders(<App />);
+    await user.click(await q.findByRole('tab', {name: 'completed (3)'}));
+
+    const names = () => q.getAllByRole('checkbox').map(checkbox => checkbox.getAttribute('aria-labelledby'));
+    expect(names()).toEqual(['list-item-label-item2', 'list-item-label-item3', 'list-item-label-item1']);
+
+    await user.type(q.getByLabelText('searchCompleted'), 'acu');
+    await waitFor(() => expect(names()).toEqual(['list-item-label-item2']));
+
+    await user.type(q.getByLabelText('searchCompleted'), 'xyz');
+    expect(await q.findByText('noSearchResults')).toBeInTheDocument();
+  });
+
   it('shows the list name in the app bar when the user has a single list', async () => {
     mockSignedInUser({items: [], lists: [{id: 'mine', name: 'Minha Lista'}]});
 

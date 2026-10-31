@@ -34,6 +34,7 @@ export default function GroceryList({ listId = 'mine' }: { listId?: string }) {
     const { t } = useTranslation();
     const [editingItemId, setEditingItemId] = useState<GroceryItem['id'] | null>(null);
     const [activeTab, setActiveTab] = useState(0);
+    const [completedSearch, setCompletedSearch] = useState('');
     const {
         items,
         addItem,
@@ -78,9 +79,9 @@ export default function GroceryList({ listId = 'mine' }: { listId?: string }) {
         setActiveTab(newValue);
     };
 
-    const filteredItems = items.filter(item =>
-        activeTab === 0 ? !item.completed : item.completed
-    );
+    const filteredItems = activeTab === 0
+        ? items.filter(item => !item.completed)
+        : searchCompletedItems(items, completedSearch);
     const savedItems = items.filter(item => !item.id.startsWith('new'));
     const pendingCount = savedItems.filter(item => !item.completed).length;
     const completedCount = savedItems.length - pendingCount;
@@ -99,13 +100,24 @@ export default function GroceryList({ listId = 'mine' }: { listId?: string }) {
                     <Tab label={`${t('completed')} (${completedCount})`} id="completed-tab" aria-controls="completed-panel" />
                 </Tabs>
             </Box>
+            {activeTab === 1 && (
+                <TextField
+                    type="search"
+                    size="small"
+                    fullWidth
+                    value={completedSearch}
+                    onChange={event => setCompletedSearch(event.target.value)}
+                    placeholder={t('searchCompleted')}
+                    slotProps={{ htmlInput: { 'aria-label': t('searchCompleted') } }}
+                />
+            )}
             <HorizontalSwipeRegion onChange={val => setActiveTab(val === 'left' ? 1 : 0)}>
                 <>
                     <ListStatus
                         isLoading={isLoading}
                         hasLoadFailed={hasLoadFailed}
                         isEmpty={filteredItems.length === 0}
-                        emptyMessage={t(activeTab === 0 ? 'emptyPending' : 'emptyCompleted')}
+                        emptyMessage={t(emptyMessageKey(activeTab, completedSearch))}
                         onRetry={retryLoad}
                     />
                     <List>
@@ -147,6 +159,21 @@ export default function GroceryList({ listId = 'mine' }: { listId?: string }) {
             </Fab>
         </>
     )
+}
+
+// Completed items act as a history, so they are listed by name instead of by date.
+function searchCompletedItems(items: GroceryItem[], search: string): GroceryItem[] {
+    const query = normalizeItemName(search);
+    return items
+        .filter(item => item.completed && normalizeItemName(item.name).includes(query))
+        .sort((a, b) => a.name.localeCompare(b.name, 'pt-BR', { sensitivity: 'base' }));
+}
+
+function emptyMessageKey(activeTab: number, completedSearch: string): string {
+    if (activeTab === 0) {
+        return 'emptyPending';
+    }
+    return completedSearch.trim() === '' ? 'emptyCompleted' : 'noSearchResults';
 }
 
 interface ListStatusProps {

@@ -24,6 +24,8 @@
   "completed": "Comprados",
   "emptyPending": "Nada pendente — toque em + para adicionar",
   "emptyCompleted": "Nenhum item comprado ainda",
+  "searchCompleted": "Buscar nos comprados",
+  "noSearchResults": "Nenhum item encontrado",
   "loadListError": "Não foi possível carregar a lista.",
   "retry": "Tentar novamente",
   "swipeToNavigate": "Deslize para navegar entre as abas",
