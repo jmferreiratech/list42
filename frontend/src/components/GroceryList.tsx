@@ -354,6 +354,7 @@ function EditingItem({
     selectedList,
 }: EditingItemProps) {
     const { t } = useTranslation();
+    const { showToast } = useToast();
     const [currentName, setCurrentName] = useState(item.name);
     const { data: groceryListData } = api.endpoints.getGroceryList.useQuery({ id: selectedList });
     const saveInProgress = useRef(false);
@@ -377,14 +378,8 @@ function EditingItem({
         const trimmedName = currentName.trim();
         if (trimmedName === '') {
             handleDeleteItem(item.id);
-        } else {
-            const existingItem = groceryListData?.items.find(i => i.name.trim().toLocaleLowerCase() === trimmedName.toLocaleLowerCase() && i.completed);
-            if (existingItem) {
-                handleToggleComplete(existingItem.id, existingItem.completed);
-                setCurrentName('');
-            } else {
-                await onSave(item.id, trimmedName);
-            }
+        } else if (!reuseExistingItem(trimmedName)) {
+            await onSave(item.id, trimmedName);
         }
         
         setTimeout(() => {
@@ -408,13 +403,25 @@ function EditingItem({
     const handleAutocompleteChange = (_: React.SyntheticEvent, value: string | null) => {
         if (value) {
             setCurrentName(value);
-
-            const existingItem = groceryListData?.items.find(i => i.name === value && i.completed);
-            if (existingItem) {
-                handleToggleComplete(existingItem.id, existingItem.completed);
-                setCurrentName('');
-            }
+            reuseExistingItem(value);
         }
+    };
+
+    // Returns whether another item already has this name, ignoring case and accents.
+    // A completed match goes back to pending instead of creating a duplicate.
+    const reuseExistingItem = (name: string): boolean => {
+        const existingItem = groceryListData?.items.find(i => i.id !== item.id && isSameItemName(i.name, name));
+        if (!existingItem) {
+            return false;
+        }
+
+        if (existingItem.completed) {
+            handleToggleComplete(existingItem.id, existingItem.completed);
+        } else {
+            showToast('itemAlreadyPending', 'info');
+        }
+        setCurrentName('');
+        return true;
     };
 
     return (
@@ -469,4 +476,12 @@ function EditingItem({
 
         </ListItem>
     );
+}
+
+function isSameItemName(a: string, b: string): boolean {
+    return normalizeItemName(a) === normalizeItemName(b);
+}
+
+function normalizeItemName(name: string): string {
+    return name.trim().normalize('NFD').replace(/\p{Diacritic}/gu, '').toLocaleLowerCase('pt-BR');
 }

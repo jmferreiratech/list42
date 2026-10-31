@@ -17,6 +17,7 @@
   "sharedList": "Lista Compartilhada {{id}}",
   "enterItemName": "Digite o nome do item...",
   "addItem": "Adicionar item",
+  "itemAlreadyPending": "Este item já está na lista.",
   "deleteItem": "Excluir {{name}}",
   "editItem": "Editar {{name}}",
   "pending": "Pendentes",

@@ -352,6 +352,39 @@ describe('App', () => {
     expect(await q.findByPlaceholderText('enterItemName')).toHaveFocus();
   });
 
+  it('moves a completed item back to pending when its name is typed with other case and accents', async () => {
+    mockSignedInUser({items: [
+      {id: 'item1', name: 'Ração', completed: true},
+      {id: 'item2', name: 'Manteiga', completed: false},
+    ]});
+    let sentItem: GroceryItem | undefined;
+    server.use(
+      http.put(`${settings.baseURL}/lists/mine/items/item1`, async ({request}) => {
+        sentItem = await request.json() as GroceryItem;
+        return HttpResponse.json({id: 'mine', items: [sentItem, {id: 'item2', name: 'Manteiga', completed: false}]});
+      }),
+    );
+
+    const {q, user} = renderWithProviders(<App />);
+    await q.findByText('Manteiga');
+    await user.click(q.getByLabelText('addItem'));
+    await user.keyboard('RACAO{Enter}');
+
+    await waitFor(() => expect(sentItem).toMatchObject({name: 'Ração', completed: false}));
+  });
+
+  it('does not add a duplicate of a pending item', async () => {
+    mockSignedInUser({items: [{id: 'item1', name: 'Ração', completed: false}]});
+
+    const {q, user} = renderWithProviders(<App />);
+    await q.findByText('Ração');
+    await user.click(q.getByLabelText('addItem'));
+    await user.keyboard('racao{Enter}');
+
+    expect(await q.findByText('itemAlreadyPending')).toBeInTheDocument();
+    expect(q.getAllByRole('checkbox', {name: 'Ração'})).toHaveLength(1);
+  });
+
   it('shows the list name in the app bar when the user has a single list', async () => {
     mockSignedInUser({items: [], lists: [{id: 'mine', name: 'Minha Lista'}]});
 
