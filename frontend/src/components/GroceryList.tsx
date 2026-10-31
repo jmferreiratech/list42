@@ -13,6 +13,7 @@ import {
     ListItem,
     ListItemButton,
     ListItemText,
+    Slide,
     Tab,
     Tabs,
     TextField,
@@ -34,6 +35,9 @@ export default function GroceryList({ listId = 'mine' }: { listId?: string }) {
     const { t } = useTranslation();
     const [editingItemId, setEditingItemId] = useState<GroceryItem['id'] | null>(null);
     const [activeTab, setActiveTab] = useState(0);
+    // Only animate the list once the user switches tabs, not when it first appears.
+    const hasSwitchedTab = useRef(false);
+    const tabRegionRef = useRef<HTMLDivElement>(null);
     const [completedSearch, setCompletedSearch] = useState('');
     const {
         items,
@@ -66,7 +70,7 @@ export default function GroceryList({ listId = 'mine' }: { listId?: string }) {
     const handleAdd = () => {
         const newId = addItem();
         setEditingItemId(newId);
-        setActiveTab(0);
+        switchTab(0);
     };
 
     const handleToggle = (id: GroceryItem['id'], completed: GroceryItem['completed']) => {
@@ -75,8 +79,13 @@ export default function GroceryList({ listId = 'mine' }: { listId?: string }) {
             setEditingItemId(null);
     };
 
+    const switchTab = (tab: number) => {
+        hasSwitchedTab.current = true;
+        setActiveTab(tab);
+    };
+
     const handleTabChange = (_: React.SyntheticEvent, newValue: number) => {
-        setActiveTab(newValue);
+        switchTab(newValue);
     };
 
     const filteredItems = activeTab === 0
@@ -111,43 +120,53 @@ export default function GroceryList({ listId = 'mine' }: { listId?: string }) {
                     slotProps={{ htmlInput: { 'aria-label': t('searchCompleted') } }}
                 />
             )}
-            <HorizontalSwipeRegion onChange={val => setActiveTab(val === 'left' ? 1 : 0)}>
-                <>
-                    <ListStatus
-                        isLoading={isLoading}
-                        hasLoadFailed={hasLoadFailed}
-                        isEmpty={filteredItems.length === 0}
-                        emptyMessage={t(emptyMessageKey(activeTab, completedSearch))}
-                        onRetry={retryLoad}
-                    />
-                    <List>
-                        <TransitionGroup>
-                            {filteredItems.map((item) => (
-                                <Collapse key={item.id}>
-                                    {
-                                        editingItemId === item.id ? (
-                                            <EditingItem
-                                                item={item}
-                                                onSave={handleSave}
-                                                handleDeleteItem={handleDelete}
-                                                handleToggleComplete={(id, value) => handleToggle(id, value)}
-                                                selectedList={listId}
-                                            />
-                                        ) : (
-                                            <Item
-                                                item={item}
-                                                handleToggleComplete={() => handleToggle(item.id, item.completed)}
-                                                handleDeleteItem={handleDelete}
-                                                setEditingItemId={setEditingItemId}
-                                            />
-                                        )
-                                    }
-                                </Collapse>
-                            ))}
-                        </TransitionGroup>
-                    </List>
-                </>
-            </HorizontalSwipeRegion>
+            <Box ref={tabRegionRef} sx={{ overflow: 'hidden' }}>
+                <HorizontalSwipeRegion onChange={val => switchTab(val === 'left' ? 1 : 0)}>
+                    <Slide
+                        key={activeTab}
+                        in
+                        appear={hasSwitchedTab.current}
+                        direction={activeTab === 1 ? 'left' : 'right'}
+                        container={tabRegionRef.current}
+                    >
+                        <Box>
+                            <ListStatus
+                                isLoading={isLoading}
+                                hasLoadFailed={hasLoadFailed}
+                                isEmpty={filteredItems.length === 0}
+                                emptyMessage={t(emptyMessageKey(activeTab, completedSearch))}
+                                onRetry={retryLoad}
+                            />
+                            <List>
+                                <TransitionGroup>
+                                    {filteredItems.map((item) => (
+                                        <Collapse key={item.id}>
+                                            {
+                                                editingItemId === item.id ? (
+                                                    <EditingItem
+                                                        item={item}
+                                                        onSave={handleSave}
+                                                        handleDeleteItem={handleDelete}
+                                                        handleToggleComplete={(id, value) => handleToggle(id, value)}
+                                                        selectedList={listId}
+                                                    />
+                                                ) : (
+                                                    <Item
+                                                        item={item}
+                                                        handleToggleComplete={() => handleToggle(item.id, item.completed)}
+                                                        handleDeleteItem={handleDelete}
+                                                        setEditingItemId={setEditingItemId}
+                                                    />
+                                                )
+                                            }
+                                        </Collapse>
+                                    ))}
+                                </TransitionGroup>
+                            </List>
+                        </Box>
+                    </Slide>
+                </HorizontalSwipeRegion>
+            </Box>
             <Fab
                 color="primary"
                 aria-label={t('addItem')}
