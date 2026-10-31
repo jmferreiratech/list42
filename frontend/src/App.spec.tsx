@@ -1,6 +1,6 @@
 import { cleanup, fireEvent, render, RenderOptions, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import { http, HttpResponse } from 'msw';
+import { delay, http, HttpResponse } from 'msw';
 import { setupServer } from 'msw/node';
 import { Provider } from 'react-redux';
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it } from 'vitest';
@@ -289,6 +289,45 @@ describe('App', () => {
     await user.keyboard('{Enter}');
 
     expect(await q.findByRole('combobox')).toHaveValue('Leite');
+  });
+
+  it('shows an empty message when nothing is pending', async () => {
+    mockSignedInUser({items: [{id: 'item1', name: 'Leite', completed: true}]});
+
+    const {q} = renderWithProviders(<App />);
+
+    expect(await q.findByText('emptyPending')).toBeInTheDocument();
+  });
+
+  it('shows a loading indicator while the list loads', async () => {
+    mockSignedInUser({items: []});
+    server.use(
+      http.get(`${settings.baseURL}/lists/mine`, async () => {
+        await delay(200);
+        return HttpResponse.json({id: 'mine', items: []});
+      }),
+    );
+
+    const {q} = renderWithProviders(<App />);
+
+    expect(await q.findByRole('progressbar', {name: 'loading'})).toBeInTheDocument();
+    expect(await q.findByText('emptyPending')).toBeInTheDocument();
+  });
+
+  it('shows an error and loads the list again on retry', async () => {
+    mockSignedInUser({items: []});
+    server.use(
+      http.get(`${settings.baseURL}/lists/mine`, () => HttpResponse.json({}, {status: 500}), {once: true}),
+      http.get(`${settings.baseURL}/lists/mine`, () => {
+        return HttpResponse.json({id: 'mine', items: [{id: 'item1', name: 'Leite', completed: false}]});
+      }),
+    );
+
+    const {q, user} = renderWithProviders(<App />);
+    expect(await q.findByText('loadListError')).toBeInTheDocument();
+    await user.click(q.getByRole('button', {name: 'retry'}));
+
+    expect(await q.findByText('Leite')).toBeInTheDocument();
   });
 
   it('shows the list name in the app bar when the user has a single list', async () => {

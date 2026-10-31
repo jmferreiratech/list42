@@ -3,7 +3,9 @@ import DeleteIcon from '@mui/icons-material/Delete';
 import {
     Autocomplete,
     Box,
+    Button,
     Checkbox,
+    CircularProgress,
     Collapse,
     Fab,
     IconButton,
@@ -13,7 +15,8 @@ import {
     ListItemText,
     Tab,
     Tabs,
-    TextField
+    TextField,
+    Typography
 } from '@mui/material';
 import { createId } from '@paralleldrive/cuid2';
 import { useMemo, useRef, useState } from 'react';
@@ -33,6 +36,9 @@ export default function GroceryList({ listId = 'mine' }: { listId?: string }) {
         addItem,
         updateItem,
         deleteItem,
+        isLoading,
+        hasLoadFailed,
+        retryLoad,
     } = useItemsList(listId);
 
     const handleDelete = (id: GroceryItem['id']) => {
@@ -88,32 +94,41 @@ export default function GroceryList({ listId = 'mine' }: { listId?: string }) {
                 </Tabs>
             </Box>
             <HorizontalSwipeRegion onChange={val => setActiveTab(val === 'left' ? 1 : 0)}>
-                <List>
-                    <TransitionGroup>
-                        {filteredItems.map((item) => (
-                            <Collapse key={item.id}>
-                                {
-                                    editingItemId === item.id ? (
-                                        <EditingItem
-                                            item={item}
-                                            onSave={handleSave}
-                                            handleDeleteItem={handleDelete}
-                                            handleToggleComplete={(id, value) => handleToggle(id, value)}
-                                            selectedList={listId}
-                                        />
-                                    ) : (
-                                        <Item
-                                            item={item}
-                                            handleToggleComplete={() => handleToggle(item.id, item.completed)}
-                                            handleDeleteItem={handleDelete}
-                                            setEditingItemId={setEditingItemId}
-                                        />
-                                    )
-                                }
-                            </Collapse>
-                        ))}
-                    </TransitionGroup>
-                </List>
+                <>
+                    <ListStatus
+                        isLoading={isLoading}
+                        hasLoadFailed={hasLoadFailed}
+                        isEmpty={filteredItems.length === 0}
+                        emptyMessage={t(activeTab === 0 ? 'emptyPending' : 'emptyCompleted')}
+                        onRetry={retryLoad}
+                    />
+                    <List>
+                        <TransitionGroup>
+                            {filteredItems.map((item) => (
+                                <Collapse key={item.id}>
+                                    {
+                                        editingItemId === item.id ? (
+                                            <EditingItem
+                                                item={item}
+                                                onSave={handleSave}
+                                                handleDeleteItem={handleDelete}
+                                                handleToggleComplete={(id, value) => handleToggle(id, value)}
+                                                selectedList={listId}
+                                            />
+                                        ) : (
+                                            <Item
+                                                item={item}
+                                                handleToggleComplete={() => handleToggle(item.id, item.completed)}
+                                                handleDeleteItem={handleDelete}
+                                                setEditingItemId={setEditingItemId}
+                                            />
+                                        )
+                                    }
+                                </Collapse>
+                            ))}
+                        </TransitionGroup>
+                    </List>
+                </>
             </HorizontalSwipeRegion>
             <Fab
                 color="primary"
@@ -126,6 +141,45 @@ export default function GroceryList({ listId = 'mine' }: { listId?: string }) {
             </Fab>
         </>
     )
+}
+
+interface ListStatusProps {
+    isLoading: boolean;
+    hasLoadFailed: boolean;
+    isEmpty: boolean;
+    emptyMessage: string;
+    onRetry: () => void;
+}
+
+function ListStatus({ isLoading, hasLoadFailed, isEmpty, emptyMessage, onRetry }: ListStatusProps) {
+    const { t } = useTranslation();
+
+    if (isLoading) {
+        return (
+            <Box sx={{ display: 'flex', justifyContent: 'center', py: 4 }}>
+                <CircularProgress aria-label={t('loading')} />
+            </Box>
+        );
+    }
+
+    if (hasLoadFailed) {
+        return (
+            <Box role="alert" sx={{ textAlign: 'center', py: 4 }}>
+                <Typography sx={{ mb: 2 }}>{t('loadListError')}</Typography>
+                <Button variant="outlined" onClick={onRetry}>{t('retry')}</Button>
+            </Box>
+        );
+    }
+
+    if (isEmpty) {
+        return (
+            <Typography color="text.secondary" sx={{ textAlign: 'center', py: 4 }}>
+                {emptyMessage}
+            </Typography>
+        );
+    }
+
+    return null;
 }
 
 interface ItemProps {
@@ -179,7 +233,7 @@ function Item({ item, handleToggleComplete, handleDeleteItem, setEditingItemId }
 function useItemsList(listId: string = 'mine') {
     const { showToast } = useToast();
     const [tempItem, setTempItem] = useState<GroceryItem | null>(null);
-    const { data: groceryListData, isLoading, isError } = api.endpoints.getGroceryList.useQuery({ id: listId });
+    const { data: groceryListData, isLoading, isError, refetch } = api.endpoints.getGroceryList.useQuery({ id: listId });
     const [addGroceryListItem, { isLoading: isAdding }] = api.endpoints.addItem.useMutation();
     const [updateGroceryListItem, { isLoading: isUpdating }] = api.endpoints.updateItem.useMutation();
     const [deleteGroceryListItem, { isLoading: isDeleting }] = api.endpoints.deleteItem.useMutation();
@@ -276,7 +330,8 @@ function useItemsList(listId: string = 'mine') {
         deleteItem,
         isLoading,
         isUpdating: isAdding || isUpdating || isDeleting,
-        isError,
+        hasLoadFailed: isError && !groceryListData,
+        retryLoad: refetch,
     };
 }
 
