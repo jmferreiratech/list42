@@ -48,7 +48,7 @@ function InternalApp({user}: {user: Session['user']}) {
     const [selectedListId, setSelectedListId] = useLocalStorage(`${user.id}.selectedListId`, 'mine');
 
     return (
-        <Container maxWidth="sm" sx={{mt: 2, pb: 10}}>
+        <Container maxWidth="sm" sx={{mt: 2, pb: 14}}>
             <ShareCodeRedeemer onListRedeemed={setSelectedListId} />
             <AppBar selectedListId={selectedListId} onListChange={setSelectedListId} />
             <GroceryList listId={selectedListId} />

@@ -310,10 +310,21 @@ function useItemsList(listId: string = 'mine') {
         if (itemToDelete) {
             try {
                 await deleteGroceryListItem({ id: listId, item: itemToDelete }).unwrap();
+                showToast('itemDeleted', 'info', { label: 'undo', onClick: () => restoreItem(itemToDelete) });
             } catch (error) {
                 console.error('Failed to delete item:', error);
                 showToast('deleteItemError', 'error');
             }
+        }
+    };
+
+    // Saving an item with its original id brings it back, since the API overwrites items by id.
+    const restoreItem = async (item: GroceryItem) => {
+        try {
+            await addGroceryListItem({ id: listId, item }).unwrap();
+        } catch (error) {
+            console.error('Failed to restore item:', error);
+            showToast('addItemError', 'error');
         }
     };
 

@@ -439,6 +439,27 @@ describe('App', () => {
     expect(await q.findByText('noSearchResults')).toBeInTheDocument();
   });
 
+  it('restores a deleted item when undo is pressed', async () => {
+    const leite = {id: 'item1', name: 'Leite', completed: false};
+    mockSignedInUser({items: [leite]});
+    let restoredItem: GroceryItem | undefined;
+    server.use(
+      http.delete(`${settings.baseURL}/lists/mine/items/item1`, () => HttpResponse.json({id: 'mine', items: []})),
+      http.post(`${settings.baseURL}/lists/mine/items`, async ({request}) => {
+        restoredItem = await request.json() as GroceryItem;
+        return HttpResponse.json({id: 'mine', items: [restoredItem]});
+      }),
+    );
+
+    const {q, user} = renderWithProviders(<App />);
+    await user.click(await q.findByRole('button', {name: 'deleteItem'}));
+    expect(await q.findByText('itemDeleted')).toBeInTheDocument();
+    await user.click(q.getByRole('button', {name: 'undo'}));
+
+    expect(await q.findByText('Leite')).toBeInTheDocument();
+    expect(restoredItem).toMatchObject(leite);
+  });
+
   it('shows the list name in the app bar when the user has a single list', async () => {
     mockSignedInUser({items: [], lists: [{id: 'mine', name: 'Minha Lista'}]});
 
