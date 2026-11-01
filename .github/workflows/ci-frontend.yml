@@ -1,0 +1,38 @@
+name: Check frontend
+
+on:
+  pull_request:
+    paths:
+      - 'frontend/**'
+      - '.github/workflows/ci-frontend.yml'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: 'ci-frontend-${{ github.ref }}'
+  cancel-in-progress: true
+
+jobs:
+  check:
+    defaults:
+      run:
+        working-directory: frontend
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20.x'
+          cache: 'yarn'
+          cache-dependency-path: frontend/yarn.lock
+      - name: Install dependencies
+        run: yarn --frozen-lockfile
+      - name: Lint
+        run: yarn lint
+      - name: Type-check
+        run: yarn tsc -b
+      - name: Test
+        run: yarn test
