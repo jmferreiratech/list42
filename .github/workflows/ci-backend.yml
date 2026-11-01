@@ -1,0 +1,40 @@
+name: Check backend
+
+on:
+  pull_request:
+    paths:
+      - 'backend/**'
+      - '.github/workflows/ci-backend.yml'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: 'ci-backend-${{ github.ref }}'
+  cancel-in-progress: true
+
+jobs:
+  check:
+    defaults:
+      run:
+        working-directory: backend
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22.x'
+          cache: 'yarn'
+          cache-dependency-path: backend/yarn.lock
+      - name: Install dependencies
+        run: yarn --frozen-lockfile
+      # Only src: the root config files are outside the TS project and fail type-aware linting.
+      - name: Lint
+        run: npx eslint src
+      - name: Type-check
+        run: npx tsc
+      # The pretest script starts DynamoDB Local in Docker.
+      - name: Test
+        run: yarn test
