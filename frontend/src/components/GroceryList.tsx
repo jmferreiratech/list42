@@ -1,4 +1,5 @@
 import AddIcon from '@mui/icons-material/Add';
+import CloudUploadOutlinedIcon from '@mui/icons-material/CloudUploadOutlined';
 import DeleteIcon from '@mui/icons-material/Delete';
 import {
     Autocomplete,
@@ -31,6 +32,7 @@ import {
     useAddItem,
     useDeleteItem,
     useIsSavingItems,
+    useUnsentItemIds,
     useUpdateItem,
 } from '../api';
 import { HorizontalSwipeRegion } from './SwipeRegion.tsx';
@@ -56,6 +58,7 @@ export default function GroceryList({ listId = 'mine' }: { listId?: string }) {
         hasLoadFailed,
         retryLoad,
     } = useItemsList(listId);
+    const unsentItemIds = useUnsentItemIds(listId);
 
     const handleDelete = (id: GroceryItem['id']) => {
         deleteItem(id);
@@ -162,6 +165,7 @@ export default function GroceryList({ listId = 'mine' }: { listId?: string }) {
                                                 ) : (
                                                     <Item
                                                         item={item}
+                                                        isUnsent={unsentItemIds.has(item.id)}
                                                         handleToggleComplete={() => handleToggle(item.id, item.completed)}
                                                         handleDeleteItem={handleDelete}
                                                         setEditingItemId={setEditingItemId}
@@ -250,12 +254,13 @@ function ListStatus({ isLoading, hasLoadFailed, isEmpty, emptyMessage, onRetry }
 
 interface ItemProps {
     item: GroceryItem;
+    isUnsent: boolean;
     handleToggleComplete: (id: GroceryItem['id']) => void;
     handleDeleteItem: (id: GroceryItem['id']) => void;
     setEditingItemId: (id: GroceryItem['id']) => void;
 }
 
-function Item({ item, handleToggleComplete, handleDeleteItem, setEditingItemId }: ItemProps) {
+function Item({ item, isUnsent, handleToggleComplete, handleDeleteItem, setEditingItemId }: ItemProps) {
     const { t } = useTranslation();
 
     return (
@@ -291,6 +296,9 @@ function Item({ item, handleToggleComplete, handleDeleteItem, setEditingItemId }
                         color: item.completed ? 'text.secondary' : 'text.primary',
                     }}
                 />
+                {isUnsent && (
+                    <CloudUploadOutlinedIcon fontSize="small" color="disabled" titleAccess={t('unsentChange')} sx={{ ml: 1 }} />
+                )}
             </ListItemButton>
         </ListItem>
     );
@@ -306,6 +314,7 @@ function useItemsList(listId: string = 'mine') {
         // Polling also stops while the app is in the background.
         refetchInterval: isSavingItems ? false : LIST_POLLING_INTERVAL_MS,
         refetchOnWindowFocus: isSavingItems ? false : 'always',
+        refetchOnReconnect: isSavingItems ? false : 'always',
     });
     const { mutate: addGroceryListItem } = useAddItem(listId);
     const { mutate: updateGroceryListItem } = useUpdateItem(listId);

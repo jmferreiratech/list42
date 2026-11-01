@@ -2,7 +2,7 @@ import { cleanup, fireEvent, render, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { delay, http, HttpResponse } from 'msw';
 import { setupServer } from 'msw/node';
-import { focusManager, QueryClientProvider } from '@tanstack/react-query';
+import { focusManager, onlineManager, QueryClientProvider } from '@tanstack/react-query';
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import App from './App';
 import { createQueryClient, GroceryItem } from './api';
@@ -538,7 +538,109 @@ describe('App', () => {
       expect(await navigator.clipboard.readText()).toBe(`${window.location.origin}/list42/?shared=abc123`);
     });
   });
+
+  describe('offline', () => {
+    it('shows the last loaded list when the app opens without network', async () => {
+      mockSignedInUser({items: [{id: 'item1', name: 'Leite', completed: false}]});
+      const online = renderWithProviders(<App />);
+      await online.q.findByText('Leite');
+      await waitFor(() => expect(savedOfflineCache()).toContain('Leite'));
+      online.q.unmount();
+
+      goOffline();
+      const {q} = renderWithProviders(<App />);
+
+      expect(await q.findByText('Leite')).toBeInTheDocument();
+      expect(q.getByRole('status')).toHaveTextContent('offline');
+    });
+
+    it('sends a change made offline once the connection returns', async () => {
+      mockSignedInUser({items: [{id: 'item1', name: 'Leite', completed: false}]});
+      const sentItems = recordSentItems();
+      const {q, user} = renderWithProviders(<App />);
+      await q.findByText('Leite');
+
+      onlineManager.setOnline(false);
+      await user.click(q.getByRole('checkbox', {name: 'Leite'}));
+      await user.click(q.getByRole('tab', {name: 'completed (1)'}));
+      expect(await q.findByTitle('unsentChange')).toBeInTheDocument();
+      expect(sentItems).toEqual([]);
+      onlineManager.setOnline(true);
+
+      await waitFor(() => expect(sentItems).toMatchObject([{id: 'item1', completed: true}]));
+      await waitFor(() => expect(q.queryByTitle('unsentChange')).not.toBeInTheDocument());
+    });
+
+    it('sends a change made offline after the app is closed and opened again', async () => {
+      mockSignedInUser({items: [{id: 'item1', name: 'Leite', completed: false}]});
+      const sentItems = recordSentItems();
+      const offline = renderWithProviders(<App />);
+      await offline.q.findByText('Leite');
+      onlineManager.setOnline(false);
+      await offline.user.click(offline.q.getByRole('checkbox', {name: 'Leite'}));
+      await waitFor(() => expect(savedOfflineCache()).toContain('"isPaused":true'));
+      offline.q.unmount();
+
+      onlineManager.setOnline(true);
+      renderWithProviders(<App />);
+
+      await waitFor(() => expect(sentItems).toMatchObject([{id: 'item1', completed: true}]));
+    });
+
+    it('sends the time of the change, so an older offline change can be told apart', async () => {
+      mockSignedInUser({items: [{id: 'item1', name: 'Leite', completed: false}]});
+      const sentItems = recordSentItems();
+      const {q, user} = renderWithProviders(<App />);
+
+      await user.click(await q.findByRole('checkbox', {name: 'Leite'}));
+
+      await waitFor(() => expect(sentItems).toHaveLength(1));
+      expect(Date.parse(sentItems[0].updatedAt ?? '')).not.toBeNaN();
+    });
+
+    it('forgets the saved lists when the user signs out', async () => {
+      mockSignedInUser({items: [{id: 'item1', name: 'Leite', completed: false}]});
+      const {q, user} = renderWithProviders(<App />);
+      await q.findByText('Leite');
+      await waitFor(() => expect(savedOfflineCache()).toContain('Leite'));
+      server.use(
+        http.post(`${settings.baseURL}/auth/sign-out`, () => HttpResponse.json({success: true})),
+        http.get(`${settings.baseURL}/auth/get-session`, () => HttpResponse.json(null)),
+      );
+
+      await user.click(q.getByTestId('PersonIcon'));
+      await user.click(await q.findByText('logout'));
+
+      expect(await q.findByText('signInMessage')).toBeInTheDocument();
+      await waitFor(() => expect(savedOfflineCache()).toBeNull());
+      goOffline();
+      const reopened = renderWithProviders(<App />);
+      expect(await reopened.q.findAllByText('signInMessage')).not.toHaveLength(0);
+    });
+  });
 });
+
+function savedOfflineCache(): string | null {
+  return localStorage.getItem('list42.offlineCache');
+}
+
+// The device has no network: every request fails, as fetch does offline.
+function goOffline() {
+  onlineManager.setOnline(false);
+  server.use(http.all('*', () => HttpResponse.error()));
+}
+
+function recordSentItems(): GroceryItem[] {
+  const sentItems: GroceryItem[] = [];
+  server.use(
+    http.put(`${settings.baseURL}/lists/mine/items/:id`, async ({request}) => {
+      const item = await request.json() as GroceryItem;
+      sentItems.push(item);
+      return HttpResponse.json({id: 'mine', items: [item]});
+    }),
+  );
+  return sentItems;
+}
 
 interface MockSignedInUserOptions {
   items: GroceryItem[];
@@ -576,6 +678,7 @@ afterEach(() => {
   localStorage.clear();
   window.history.replaceState({}, '', '/');
   focusManager.setFocused(undefined);
+  onlineManager.setOnline(true);
   server.resetHandlers();
   expect(unhandledRequests).toEqual([]);
 });

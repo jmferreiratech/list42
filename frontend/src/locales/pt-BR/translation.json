@@ -35,5 +35,7 @@
   "updateItemError": "Falha ao atualizar item.",
   "deleteItemError": "Falha ao excluir item.",
   "itemDeleted": "Item excluído",
-  "undo": "Desfazer"
+  "undo": "Desfazer",
+  "offline": "Sem conexão. Suas alterações serão enviadas quando a conexão voltar.",
+  "unsentChange": "Alteração ainda não enviada"
 }
