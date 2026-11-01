@@ -108,7 +108,7 @@ const GroceryListItemInputSchema = z.object({
     id: z.string().cuid2(),
     name: z.string().trim().min(1),
     completed: z.boolean(),
-    updatedAt: z.string().optional(),
+    updatedAt: z.string().datetime().optional(),
     updatedBy: z.string().optional(),
 });
 
@@ -118,6 +118,12 @@ app.post('/api/lists/:listId/items', async (req, res) => {
     const list = res.locals.item as GroceryList;
 
     const item = parse(GroceryListItemInputSchema, req.body);
+    const updatedAt = changeTime(item.updatedAt);
+
+    if (isOlderThanStored(list, item.id, updatedAt)) {
+        res.send(publicList(list));
+        return;
+    }
 
     const result = await ListsRepository.config(settings)
         .upsert(listId, {
@@ -126,7 +132,7 @@ app.post('/api/lists/:listId/items', async (req, res) => {
                 ...list.items,
                 [item.id]: {
                     ...item,
-                    updatedAt: new Date().toISOString(),
+                    updatedAt,
                     updatedBy: user.id,
                 },
             },
@@ -141,6 +147,12 @@ app.put('/api/lists/:listId/items/:id', async (req, res) => {
     const list = res.locals.item as GroceryList;
     const {user} = res.locals.auth as Session;
     const item = parse(GroceryListItemInputSchema, req.body);
+    const updatedAt = changeTime(item.updatedAt);
+
+    if (isOlderThanStored(list, id, updatedAt)) {
+        res.send(publicList(list));
+        return;
+    }
 
     const result = await ListsRepository.config(settings)
         .upsert(listId, {
@@ -150,7 +162,7 @@ app.put('/api/lists/:listId/items/:id', async (req, res) => {
                 [id]: {
                     ...item,
                     id,
-                    updatedAt: new Date().toISOString(),
+                    updatedAt,
                     updatedBy: user.id,
                 },
             },
@@ -265,6 +277,22 @@ function publicList(list?: GroceryList | null) {
         ...list,
         items: Object.values(list.items),
     };
+}
+
+// Changes made offline arrive late, so the client's time of the change is kept instead of the arrival time.
+// A time ahead of the server's (a wrong clock) is capped, so it can't block changes made after it.
+function changeTime(clientTime: string | undefined): string {
+    const now = new Date();
+    if (!clientTime || new Date(clientTime) > now) {
+        return now.toISOString();
+    }
+    return new Date(clientTime).toISOString();
+}
+
+// An older change arriving after a newer one, such as an edit made offline, must not undo it.
+function isOlderThanStored(list: GroceryList, itemId: string, updatedAt: string): boolean {
+    const storedItem = list.items[itemId];
+    return storedItem !== undefined && new Date(updatedAt) < new Date(storedItem.updatedAt);
 }
 
 function parse<T extends z.ZodType<unknown>>(schema: T, value: unknown) {

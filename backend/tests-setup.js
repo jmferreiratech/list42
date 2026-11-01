@@ -12,9 +12,13 @@ afterAll(async () => {
     await deleteTables(ddbTables);
 });
 
-const serverless = parsedServerlessFile('./src/modules/auth/resources.yml');
+const resourceFiles = [
+    './src/modules/auth/resources.yml',
+    './src/modules/lists/resources.yml',
+];
 
-const ddbTables = Object.values(serverless.resources.Resources)
+const ddbTables = resourceFiles
+    .flatMap(file => Object.values(parsedServerlessFile(file).resources.Resources))
     .filter(r => r.Type === 'AWS::DynamoDB::Table')
     .map(r => r.Properties);
 
