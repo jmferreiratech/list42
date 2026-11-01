@@ -12,7 +12,6 @@ custom:
   scriptable:
     hooks:
       before:package:initialize: tsc
-  secrets: ${file(./secrets.yml)}
 
 provider:
   name: aws
@@ -28,7 +27,12 @@ provider:
   logs:
     httpApi: true
   environment:
-    $<<: ${self:custom.secrets}
+    LOG_LEVEL: ${ssm:/list42/${sls:stage}/LOG_LEVEL}
+    ORIGINS: ${ssm:/list42/${sls:stage}/ORIGINS}
+    BETTER_AUTH_SECRET: ${ssm:/list42/${sls:stage}/BETTER_AUTH_SECRET}
+    GOOGLE_CLIENT_ID: ${ssm:/list42/${sls:stage}/GOOGLE_CLIENT_ID}
+    GOOGLE_CLIENT_SECRET: ${ssm:/list42/${sls:stage}/GOOGLE_CLIENT_SECRET}
+    JWT_SECRET: ${ssm:/list42/${sls:stage}/JWT_SECRET}
     NODE_OPTIONS: '--enable-source-maps --stack-trace-limit=1000'
     SERVICE_ENDPOINT: !Join ["", ["https://", !Ref ApiGatewayRestApi, ".execute-api.", !Ref AWS::Region, ".", !Ref AWS::URLSuffix, "/v1"]]
   iam:

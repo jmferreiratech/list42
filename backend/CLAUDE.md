@@ -14,7 +14,7 @@ Use yarn (npm is blocked via `engines`).
 - `yarn test src/db/ddb-adapter.test.ts` — run a single file; add `-t "<name>"` to filter by test name. Running `npx vitest` directly skips `pretest`, so start `ddb-local` first.
 - `npx tsc` — type-check (`noEmit`; also runs automatically before `serverless package`).
 - `npx eslint .` — lint. A husky pre-commit hook runs `eslint --fix` on staged `.ts`/`.mts` files.
-- `npx serverless deploy` — deploy (stage `v1`). Requires `secrets.yml` at the repo root (`LOG_LEVEL`, `ORIGINS`, `BETTER_AUTH_SECRET`, `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`, `JWT_SECRET`), which is injected as Lambda environment variables.
+- `npx serverless deploy` — deploy (stage `v1`). Normally done by CI: `.github/workflows/deploy-backend.yml` deploys on every push to `main` that touches `backend/**`. `LOG_LEVEL`, `ORIGINS`, `BETTER_AUTH_SECRET`, `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET` and `JWT_SECRET` are read from SSM Parameter Store (`/list42/<stage>/<NAME>`) at deploy time and injected as Lambda environment variables. One-time AWS/GitHub setup is in `README.md`.
 
 ## Architecture
 
@@ -28,7 +28,7 @@ Use yarn (npm is blocked via `engines`).
 
 **Logging:** use the winston logger in `src/logger.ts`, not `console`. `LOG_LEVEL=debug` switches to colorized output, makes the `exceptions` middleware log every error (otherwise only `ServerError`s), and turns on the adapter's debug logs. The logger is silent when `NODE_ENV=test`.
 
-**Configuration:** `src/settings.ts` reads `process.env` (the only exception is `src/logger.ts` checking `NODE_ENV`). Table and index names are hard-coded there. `SERVICE_ENDPOINT` is set by `serverless.yml`, not `secrets.yml`: it is the API Gateway URL including the `/v1` stage, and Better Auth's `baseURL` strips `/v1` so its internal routes match. Repositories take `Settings` through a static `Repository.config(settings)` factory.
+**Configuration:** `src/settings.ts` reads `process.env` (the only exception is `src/logger.ts` checking `NODE_ENV`). Table and index names are hard-coded there. `SERVICE_ENDPOINT` is set by `serverless.yml` itself, not SSM: it is the API Gateway URL including the `/v1` stage, and Better Auth's `baseURL` strips `/v1` so its internal routes match. Repositories take `Settings` through a static `Repository.config(settings)` factory.
 
 **Auth / DynamoDB adapter:** `src/db/ddb-adapter.ts` implements Better Auth's `CustomAdapter`. With `usePlural: true`, Better Auth model names are used directly as table names (`users`, `accounts`, `sessions`, `verifications`, defined in `src/modules/auth/resources.yml`). `findMany`/`count` use full table **Scans** with in-memory filtering, sorting and paging, so they are expensive. `UsersRepository` reuses the adapter methods to read users.
 
