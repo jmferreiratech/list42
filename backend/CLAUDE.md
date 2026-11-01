@@ -14,7 +14,7 @@ Use yarn (npm is blocked via `engines`).
 - `yarn test src/db/ddb-adapter.test.ts` — run a single file; add `-t "<name>"` to filter by test name. Running `npx vitest` directly skips `pretest`, so start `ddb-local` first.
 - `npx tsc` — type-check (`noEmit`; also runs automatically before `serverless package`).
 - `npx eslint .` — lint. A husky pre-commit hook runs `eslint --fix` on staged `.ts`/`.mts` files.
-- `npx serverless deploy` — deploy (stage `v1`). Normally done by CI: `.github/workflows/deploy-backend.yml` deploys on every push to `main` that touches `backend/**`. `LOG_LEVEL`, `ORIGINS`, `BETTER_AUTH_SECRET`, `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET` and `JWT_SECRET` are read from SSM Parameter Store (`/list42/<stage>/<NAME>`) at deploy time and injected as Lambda environment variables. One-time AWS/GitHub setup is in `README.md`.
+- `npx serverless deploy` — deploy (stage `v1`). Normally done by CI: `.github/workflows/deploy-backend.yml` deploys on every push to `main` that touches `backend/**`. `LOG_LEVEL`, `ORIGINS`, `BETTER_AUTH_SECRET`, `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET` and `JWT_SECRET` are read from SSM Parameter Store (`/list42/<stage>/<NAME>`) at deploy time and injected as Lambda environment variables. One-time AWS/GitHub setup is in `README.md`. Lint (`src` only), type-check and tests run on pull requests (`.github/workflows/ci-backend.yml`).
 
 ## Architecture
 
