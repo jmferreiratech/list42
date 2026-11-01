@@ -25,7 +25,7 @@ import { useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { TransitionGroup } from "react-transition-group";
-import { useQuery } from '@tanstack/react-query';
+import { useIsRestoring, useQuery } from '@tanstack/react-query';
 import {
     GroceryItem,
     groceryListQuery,
@@ -308,10 +308,13 @@ function useItemsList(listId: string = 'mine') {
     const { showToast } = useToast();
     const [tempItem, setTempItem] = useState<GroceryItem | null>(null);
     const isSavingItems = useIsSavingItems(listId);
+    // Queries wait while the saved lists are restored, so the list is still loading then.
+    const isRestoring = useIsRestoring();
     const { data: groceryListData, isLoading, isError, refetch } = useQuery({
         ...groceryListQuery(listId),
         // Paused while changes are being saved, so a refetch can't show the list from before them.
         // Polling also stops while the app is in the background.
+        refetchOnMount: !isSavingItems,
         refetchInterval: isSavingItems ? false : LIST_POLLING_INTERVAL_MS,
         refetchOnWindowFocus: isSavingItems ? false : 'always',
         refetchOnReconnect: isSavingItems ? false : 'always',
@@ -415,7 +418,7 @@ function useItemsList(listId: string = 'mine') {
         addItem,
         updateItem,
         deleteItem,
-        isLoading,
+        isLoading: isLoading || isRestoring,
         hasLoadFailed: isError && !groceryListData,
         retryLoad: () => { refetch(); },
     };

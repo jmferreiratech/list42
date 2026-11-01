@@ -13,10 +13,12 @@ interface OfflineCacheProviderProps {
 export default function OfflineCacheProvider({ userId, children }: OfflineCacheProviderProps) {
     const queryClient = useQueryClient();
 
-    const handleRestored = async () => {
-        await queryClient.resumePausedMutations();
-        // The saved lists may be old, so the open one is fetched again once the unsent changes are in.
-        await queryClient.invalidateQueries();
+    // Queries wait until this returns, so it must not wait for the network.
+    const handleRestored = () => {
+        // The saved lists may be old: marked stale, each one is fetched again when shown.
+        void queryClient.invalidateQueries({ refetchType: 'none' });
+        // Offline, unsent changes wait here for the connection to return.
+        void queryClient.resumePausedMutations();
     };
 
     return (

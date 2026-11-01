@@ -587,6 +587,23 @@ describe('App', () => {
       await waitFor(() => expect(sentItems).toMatchObject([{id: 'item1', completed: true}]));
     });
 
+    it('shows the list with its unsent change when the app opens again without network', async () => {
+      mockSignedInUser({items: [{id: 'item1', name: 'Leite', completed: false}]});
+      const online = renderWithProviders(<App />);
+      await online.q.findByText('Leite');
+      onlineManager.setOnline(false);
+      await online.user.click(online.q.getByRole('checkbox', {name: 'Leite'}));
+      await waitFor(() => expect(savedOfflineCache()).toContain('"isPaused":true'));
+      online.q.unmount();
+
+      goOffline();
+      const {q, user} = renderWithProviders(<App />);
+      await user.click(await q.findByRole('tab', {name: 'completed (1)'}));
+
+      expect(await q.findByTitle('unsentChange')).toBeInTheDocument();
+      expect(q.getByRole('checkbox', {name: 'Leite'})).toBeChecked();
+    });
+
     it('sends the time the change was made', async () => {
       mockSignedInUser({items: [{id: 'item1', name: 'Leite', completed: false}]});
       const sentItems = recordSentItems();
