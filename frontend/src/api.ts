@@ -144,7 +144,7 @@ function useItemMutation(listId: string, action: ItemAction) {
 
     return {
         mutate: (item: GroceryItem, options?: MutateOptions<GroceryList, Error, ItemChange>) => {
-            // The client stamps the change, so the server can tell an old offline change from a newer one.
+            // The time the change was made, not when it arrives. The backend doesn't use it yet (#11).
             const change = action === 'delete' ? item : { ...item, updatedAt: new Date().toISOString() };
             mutate({ listId, action, item: change }, options);
         },

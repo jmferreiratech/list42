@@ -38,9 +38,8 @@ Use yarn (npm is blocked via `engines`).
 - Sharing: `GET /api/lists/mine/share-code` signs a 24h JWT (`iss` = owner/list id, `jti` = new cuid2). `POST /api/lists?shared=<code>` redeems it into a `list_shares` row (PK `user`, SK `list`, GSI `list_shares_by_id` on `id` = `jti`); each code can be redeemed once.
 - Access check: the `/api/lists/:listId` middleware allows the owner, or a user with a share row for that list; otherwise 404.
 - Request bodies are validated with Zod through the local `parse()` helper, which throws `ValidationError`.
-- Item adds and updates keep the client's `updatedAt` (capped at the server's time), and a change older than the stored item is ignored: the reply is the list as stored. This stops an edit made offline from overwriting a newer one when it syncs late.
 
-**Tests:** `tests-setup.js` creates DynamoDB tables in DynamoDB Local before tests from the `resources.yml` files it lists (auth and lists) and drops them afterwards. Add other modules' `resources.yml` there when tests need those tables. `vitest.config.mjs` sets `AWS_ENDPOINT_URL_DYNAMODB`, so repositories reach DynamoDB Local. The adapter test runs Better Auth's `runAdapterTest` suite. `src/api/lists/index.test.ts` is an API-level test: it starts the Express app on a random port, calls it with `fetch`, and stubs only `auth.api.getSession`.
+**Tests:** `tests-setup.js` creates DynamoDB tables in DynamoDB Local before tests by parsing a `resources.yml` (currently only `src/modules/auth/resources.yml`) and drops them afterwards. Add other modules' `resources.yml` there when tests need those tables. The adapter test runs Better Auth's `runAdapterTest` suite against DynamoDB Local. `src/db/ddb-adapter.test.ts` is the only test file; there are no API-level tests yet.
 
 ## Conventions
 

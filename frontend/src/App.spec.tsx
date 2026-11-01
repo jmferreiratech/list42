@@ -587,7 +587,7 @@ describe('App', () => {
       await waitFor(() => expect(sentItems).toMatchObject([{id: 'item1', completed: true}]));
     });
 
-    it('sends the time of the change, so an older offline change can be told apart', async () => {
+    it('sends the time the change was made', async () => {
       mockSignedInUser({items: [{id: 'item1', name: 'Leite', completed: false}]});
       const sentItems = recordSentItems();
       const {q, user} = renderWithProviders(<App />);
