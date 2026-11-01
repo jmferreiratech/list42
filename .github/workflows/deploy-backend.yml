@@ -1,0 +1,43 @@
+name: Deploy backend to AWS
+
+on:
+  push:
+    branches: ['main']
+    paths:
+      - 'backend/**'
+      - '.github/workflows/deploy-backend.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  id-token: write
+
+# Queue deploys instead of cancelling: stopping a CloudFormation update midway can leave the stack stuck.
+concurrency:
+  group: 'backend'
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    defaults:
+      run:
+        working-directory: backend
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22.x'
+          cache: 'yarn'
+          cache-dependency-path: backend/yarn.lock
+      - name: Install dependencies
+        run: yarn --frozen-lockfile
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ vars.AWS_DEPLOY_ROLE_ARN }}
+          aws-region: us-east-1
+      - name: Deploy
+        run: npx serverless deploy
