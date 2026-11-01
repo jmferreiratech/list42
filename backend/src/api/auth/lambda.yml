@@ -6,11 +6,11 @@ functions:
           path: 'api/auth'
           method: ANY
           cors:
-            origin: ${self:custom.secrets.ORIGINS}
+            origin: ${self:provider.environment.ORIGINS}
             allowCredentials: true
       - http:
           path: 'api/auth/{proxy+}'
           method: ANY
           cors:
-            origin: ${self:custom.secrets.ORIGINS}
+            origin: ${self:provider.environment.ORIGINS}
             allowCredentials: true

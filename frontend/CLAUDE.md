@@ -22,7 +22,7 @@ yarn vitest run src/App.spec.tsx -t "adds an empty new item"   # single test by 
 yarn generate-pwa-assets     # regenerate icons in public/ from public/logo.svg
 ```
 
-`VITE_BASE_URL` comes from `.env` (gitignored). The app is served under the base path `/list42/`. Pushing to `main` deploys to GitHub Pages (`../.github/workflows/deploy.yml`, which builds from `frontend/` and reads `VITE_BASE_URL` from the repo variable `vars.VITE_BASE_URL`). CI only builds; it does not run lint or tests.
+`VITE_BASE_URL` comes from `.env` (gitignored). The app is served under the base path `/list42/`. Pushing to `main` deploys to GitHub Pages (`../.github/workflows/deploy-frontend.yml`, which builds from `frontend/` and reads `VITE_BASE_URL` from the repo variable `vars.VITE_BASE_URL`). CI only builds; it does not run lint or tests.
 
 ## Architecture
 
