@@ -22,7 +22,7 @@ export class ApplicationError extends Error {
 export class ServerError extends ApplicationError {
     readonly _original;
 
-    constructor(status: number, message: string, _original?: Error) {
+    constructor(status: StatusCodes, message: string, _original?: Error) {
         super(status, message);
         this._original = _original;
     }

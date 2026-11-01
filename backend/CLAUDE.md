@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Overview
 
-Backend for List42, a shared grocery-list app. TypeScript on Node 22, Express 5 apps wrapped as AWS Lambdas (`serverless-http`), deployed with Serverless Framework v3, data in DynamoDB. Authentication is [Better Auth](https://better-auth.com) with Google SSO, backed by a custom DynamoDB adapter. User-facing strings (error messages, default list names) are in Portuguese.
+Backend for List42, a shared grocery-list app. TypeScript on Node 24, Express 5 apps wrapped as AWS Lambdas (`serverless-http`), deployed with Serverless Framework v3, data in DynamoDB. Authentication is [Better Auth](https://better-auth.com) with Google SSO, backed by a custom DynamoDB adapter. User-facing strings (error messages, default list names) are in Portuguese.
 
 ## Commands
 

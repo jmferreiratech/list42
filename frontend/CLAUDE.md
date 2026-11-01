@@ -8,7 +8,7 @@ List42 ("List For Two") is a shared grocery-list PWA. This is the frontend: Reac
 
 ## Commands
 
-Use **yarn** (Node 20). `package.json` blocks npm on purpose.
+Use **yarn** (Node 24). `package.json` blocks npm on purpose.
 
 ```bash
 yarn dev                     # Vite dev server (PWA service worker is enabled in dev too)
