@@ -3,18 +3,17 @@ import { Button, Menu, MenuItem, Avatar, Typography, Box } from '@mui/material';
 import { useTranslation } from 'react-i18next';
 import { useAuth } from './Auth.tsx';
 import { useToast } from './Toast.tsx';
+import useSessionUser from '../hooks/useSessionUser.ts';
 
 export default function UserMenu() {
     const { t } = useTranslation();
     const [anchorEl, setAnchorEl] = useState<null | HTMLElement>(null);
     const authClient = useAuth();
     const { showToast } = useToast();
-    const {data, isPending} = authClient.useSession()
+    const {user} = useSessionUser();
 
-    if (isPending || !data)
+    if (!user)
         return null;
-
-    const {user} = data;
 
     const open = Boolean(anchorEl);
 

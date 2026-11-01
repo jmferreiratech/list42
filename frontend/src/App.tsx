@@ -1,6 +1,7 @@
 import {Box, Container, CssBaseline} from '@mui/material';
 import {createTheme, ThemeProvider} from '@mui/material/styles';
-import {type Session} from './auth';
+import {useQueryClient} from '@tanstack/react-query';
+import {useEffect} from 'react';
 import AppBar from "./components/AppBar.tsx";
 import Loading from "./components/Loading.tsx";
 import SignIn from "./components/SignIn.tsx";
@@ -8,7 +9,10 @@ import ShareCodeRedeemer from "./components/ShareCodeRedeemer.tsx";
 import GroceryList from "./components/GroceryList.tsx";
 import { ToastProvider } from './components/Toast.tsx';
 import useLocalStorage from './hooks/useLocalStorage.ts';
-import { useAuth } from './components/Auth.tsx';
+import useSessionUser, {type SessionUser} from './hooks/useSessionUser.ts';
+import OfflineCacheProvider from './components/OfflineCacheProvider.tsx';
+import OfflineNotice from './components/OfflineNotice.tsx';
+import {clearOfflineCache} from './offlineCache.ts';
 
 const darkTheme = createTheme({
     palette: {
@@ -31,26 +35,41 @@ export default function AppWrapper() {
 }
 
 function App() {
-    const authClient = useAuth();
-    const {data, isPending} = authClient.useSession();
+    const {user, isPending} = useSessionUser();
 
     if (isPending) {
         return <Loading />;
     }
-    if (!data?.session) {
-        return <SignIn />;
+    if (!user) {
+        return <SignedOut />;
     }
 
-    return <InternalApp user={data.user} />;
+    return (
+        <OfflineCacheProvider userId={user.id}>
+            <InternalApp user={user} />
+        </OfflineCacheProvider>
+    );
 }
 
-function InternalApp({user}: {user: Session['user']}) {
+// Signing out, or a session that ended, must not leave the user's lists saved on this device.
+function SignedOut() {
+    const queryClient = useQueryClient();
+
+    useEffect(() => {
+        clearOfflineCache(queryClient);
+    }, [queryClient]);
+
+    return <SignIn />;
+}
+
+function InternalApp({user}: {user: SessionUser}) {
     const [selectedListId, setSelectedListId] = useLocalStorage(`${user.id}.selectedListId`, 'mine');
 
     return (
         <Container maxWidth="sm" sx={{mt: 2, pb: 14}}>
             <ShareCodeRedeemer onListRedeemed={setSelectedListId} />
             <AppBar selectedListId={selectedListId} onListChange={setSelectedListId} />
+            <OfflineNotice />
             <ListCard>
                 <GroceryList listId={selectedListId} />
             </ListCard>
