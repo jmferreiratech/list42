@@ -108,7 +108,7 @@ const GroceryListItemInputSchema = z.object({
     id: z.string().cuid2(),
     name: z.string().trim().min(1),
     completed: z.boolean(),
-    updatedAt: z.string().optional(),
+    updatedAt: z.string().datetime().optional(),
     updatedBy: z.string().optional(),
 });
 
@@ -116,65 +116,50 @@ app.post('/api/lists/:listId/items', async (req, res) => {
     const {listId} = req.params;
     const {user} = res.locals.auth as Session;
     const list = res.locals.item as GroceryList;
-
     const item = parse(GroceryListItemInputSchema, req.body);
 
     const result = await ListsRepository.config(settings)
-        .upsert(listId, {
-            ...list,
-            items: {
-                ...list.items,
-                [item.id]: {
-                    ...item,
-                    updatedAt: new Date().toISOString(),
-                    updatedBy: user.id,
-                },
-            },
+        .saveItem(listId, {
+            ...item,
+            updatedAt: changeTime(item.updatedAt),
             updatedBy: user.id,
         });
 
-    res.send(publicList(result));
+    res.send(publicList(result ?? list));
 });
 
 app.put('/api/lists/:listId/items/:id', async (req, res) => {
     const {listId, id} = req.params;
-    const list = res.locals.item as GroceryList;
     const {user} = res.locals.auth as Session;
+    const list = res.locals.item as GroceryList;
     const item = parse(GroceryListItemInputSchema, req.body);
 
     const result = await ListsRepository.config(settings)
-        .upsert(listId, {
-            ...list,
-            items: {
-                ...list.items,
-                [id]: {
-                    ...item,
-                    id,
-                    updatedAt: new Date().toISOString(),
-                    updatedBy: user.id,
-                },
-            },
+        .saveItem(listId, {
+            ...item,
+            id,
+            updatedAt: changeTime(item.updatedAt),
             updatedBy: user.id,
         });
 
-    res.send(publicList(result));
+    res.send(publicList(result ?? list));
 });
+
+// The body is optional: changes queued offline before deletes carried a time are sent without one.
+const GroceryListItemDeleteSchema = z.object({
+    updatedAt: z.string().datetime().optional(),
+}).optional();
 
 app.delete('/api/lists/:listId/items/:id', async (req, res) => {
     const {listId, id} = req.params;
-    const list = res.locals.item as GroceryList;
     const {user} = res.locals.auth as Session;
-
-    const {[id]: _, ...rest} = list.items;
+    const list = res.locals.item as GroceryList;
+    const change = parse(GroceryListItemDeleteSchema, req.body);
 
     const result = await ListsRepository.config(settings)
-        .upsert(listId, {
-            ...list,
-            items: rest,
-            updatedBy: user.id,
-        });
+        .deleteItem(listId, id, changeTime(change?.updatedAt), user.id);
 
-    res.send(publicList(result));
+    res.send(publicList(result ?? list));
 });
 
 interface JwtPayload {
@@ -263,8 +248,18 @@ function publicList(list?: GroceryList | null) {
 
     return {
         ...list,
-        items: Object.values(list.items),
+        items: Object.values(list.items).filter(item => !item.deleted),
     };
+}
+
+// Changes made offline arrive late, so the client's time of the change is kept instead of the arrival time.
+// A time ahead of the server's (a wrong clock) is capped, so it can't block changes made after it.
+function changeTime(clientTime: string | undefined): string {
+    const now = new Date();
+    if (!clientTime || new Date(clientTime) > now) {
+        return now.toISOString();
+    }
+    return new Date(clientTime).toISOString();
 }
 
 function parse<T extends z.ZodType<unknown>>(schema: T, value: unknown) {
