@@ -128,7 +128,7 @@ const itemActions: Record<ItemAction, {
         applyToItems: (items, item) => items.map(i => i.id === item.id ? item : i),
     },
     delete: {
-        send: (listId, item) => request<GroceryList>(itemPath(listId, item), { method: 'DELETE' }),
+        send: (listId, item) => request<GroceryList>(itemPath(listId, item), { method: 'DELETE', body: { updatedAt: item.updatedAt } }),
         applyToItems: (items, item) => items.filter(i => i.id !== item.id),
     },
 };
@@ -144,9 +144,8 @@ function useItemMutation(listId: string, action: ItemAction) {
 
     return {
         mutate: (item: GroceryItem, options?: MutateOptions<GroceryList, Error, ItemChange>) => {
-            // The time the change was made, not when it arrives. The backend doesn't use it yet (#11).
-            const change = action === 'delete' ? item : { ...item, updatedAt: new Date().toISOString() };
-            mutate({ listId, action, item: change }, options);
+            // The time the change was made, not when it arrives, so the backend can ignore it if a newer change is already saved.
+            mutate({ listId, action, item: { ...item, updatedAt: new Date().toISOString() } }, options);
         },
     };
 }

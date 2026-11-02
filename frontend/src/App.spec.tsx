@@ -615,6 +615,23 @@ describe('App', () => {
       expect(Date.parse(sentItems[0].updatedAt ?? '')).not.toBeNaN();
     });
 
+    it('sends the time an item was deleted', async () => {
+      mockSignedInUser({items: [{id: 'item1', name: 'Leite', completed: false}]});
+      const sentDeletes: {updatedAt?: string}[] = [];
+      server.use(
+        http.delete(`${settings.baseURL}/lists/mine/items/item1`, async ({request}) => {
+          sentDeletes.push(await request.json() as {updatedAt?: string});
+          return HttpResponse.json({id: 'mine', items: []});
+        }),
+      );
+      const {q, user} = renderWithProviders(<App />);
+
+      await user.click(await q.findByRole('button', {name: 'deleteItem'}));
+
+      await waitFor(() => expect(sentDeletes).toHaveLength(1));
+      expect(Date.parse(sentDeletes[0].updatedAt ?? '')).not.toBeNaN();
+    });
+
     it('forgets the saved lists when the user signs out', async () => {
       mockSignedInUser({items: [{id: 'item1', name: 'Leite', completed: false}]});
       const {q, user} = renderWithProviders(<App />);
