@@ -14,5 +14,7 @@ export default defineConfig({
             AWS_ENDPOINT_URL_DYNAMODB: 'http://localhost:8080',
         },
         setupFiles: ['./tests-setup.js'],
+        // Every test file recreates the same DynamoDB Local tables, so files must not run at the same time.
+        fileParallelism: false,
     },
 });
