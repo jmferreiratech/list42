@@ -116,77 +116,50 @@ app.post('/api/lists/:listId/items', async (req, res) => {
     const {listId} = req.params;
     const {user} = res.locals.auth as Session;
     const list = res.locals.item as GroceryList;
-
     const item = parse(GroceryListItemInputSchema, req.body);
-    const updatedAt = changeTime(item.updatedAt);
-
-    if (isOlderThanStored(list, item.id, updatedAt)) {
-        res.send(publicList(list));
-        return;
-    }
 
     const result = await ListsRepository.config(settings)
-        .upsert(listId, {
-            ...list,
-            items: {
-                ...list.items,
-                [item.id]: {
-                    ...item,
-                    updatedAt,
-                    updatedBy: user.id,
-                },
-            },
+        .saveItem(listId, {
+            ...item,
+            updatedAt: changeTime(item.updatedAt),
             updatedBy: user.id,
         });
 
-    res.send(publicList(result));
+    res.send(publicList(result ?? list));
 });
 
 app.put('/api/lists/:listId/items/:id', async (req, res) => {
     const {listId, id} = req.params;
-    const list = res.locals.item as GroceryList;
     const {user} = res.locals.auth as Session;
+    const list = res.locals.item as GroceryList;
     const item = parse(GroceryListItemInputSchema, req.body);
-    const updatedAt = changeTime(item.updatedAt);
-
-    if (isOlderThanStored(list, id, updatedAt)) {
-        res.send(publicList(list));
-        return;
-    }
 
     const result = await ListsRepository.config(settings)
-        .upsert(listId, {
-            ...list,
-            items: {
-                ...list.items,
-                [id]: {
-                    ...item,
-                    id,
-                    updatedAt,
-                    updatedBy: user.id,
-                },
-            },
+        .saveItem(listId, {
+            ...item,
+            id,
+            updatedAt: changeTime(item.updatedAt),
             updatedBy: user.id,
         });
 
-    res.send(publicList(result));
+    res.send(publicList(result ?? list));
 });
+
+// The body is optional: changes queued offline before deletes carried a time are sent without one.
+const GroceryListItemDeleteSchema = z.object({
+    updatedAt: z.string().datetime().optional(),
+}).optional();
 
 app.delete('/api/lists/:listId/items/:id', async (req, res) => {
     const {listId, id} = req.params;
-    const list = res.locals.item as GroceryList;
     const {user} = res.locals.auth as Session;
-
-    const {[id]: _, ...rest} = list.items;
+    const list = res.locals.item as GroceryList;
+    const change = parse(GroceryListItemDeleteSchema, req.body);
 
     const result = await ListsRepository.config(settings)
-        .upsert(listId, {
-            ...list,
-            items: rest,
-            updatedBy: user.id,
-        });
+        .deleteItem(listId, id, changeTime(change?.updatedAt), user.id);
 
-    res.send(publicList(result));
+    res.send(publicList(result ?? list));
 });
 
 interface JwtPayload {
@@ -275,7 +248,7 @@ function publicList(list?: GroceryList | null) {
 
     return {
         ...list,
-        items: Object.values(list.items),
+        items: Object.values(list.items).filter(item => !item.deleted),
     };
 }
 
@@ -287,12 +260,6 @@ function changeTime(clientTime: string | undefined): string {
         return now.toISOString();
     }
     return new Date(clientTime).toISOString();
-}
-
-// An older change arriving after a newer one, such as an edit made offline, must not undo it.
-function isOlderThanStored(list: GroceryList, itemId: string, updatedAt: string): boolean {
-    const storedItem = list.items[itemId];
-    return storedItem !== undefined && new Date(updatedAt) < new Date(storedItem.updatedAt);
 }
 
 function parse<T extends z.ZodType<unknown>>(schema: T, value: unknown) {

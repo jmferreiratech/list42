@@ -86,6 +86,53 @@ describe('lists API item changes', () => {
         expect(response.status).toBe(400);
     });
 
+    it('keeps changes to different items of the same list made at the same time', async () => {
+        const items = ['Ovos', 'Manteiga', 'Queijo', 'Tomate', 'Cebola'].map(name => ({id: createId(), name, completed: false}));
+
+        await Promise.all(items.map(addItem));
+
+        const list = await getList();
+        expect(list.items.map(i => i.name).sort()).toEqual(items.map(i => i.name).sort());
+    });
+
+    it('deletes an item', async () => {
+        const id = createId();
+        await addItem({id, name: 'Sal', completed: false, updatedAt: '2026-10-01T10:00:00.000Z'});
+
+        const list = await deleteItem(id, {updatedAt: '2026-10-01T11:00:00.000Z'});
+
+        expect(list.items).toEqual([]);
+    });
+
+    it('deletes an item when the delete carries no time', async () => {
+        const id = createId();
+        await addItem({id, name: 'Sal', completed: false, updatedAt: '2026-10-01T10:00:00.000Z'});
+
+        const list = await deleteItem(id);
+
+        expect(list.items).toEqual([]);
+    });
+
+    it('does not bring back a deleted item through an older change arriving later', async () => {
+        const id = createId();
+        await addItem({id, name: 'Óleo', completed: false, updatedAt: '2026-10-01T10:00:00.000Z'});
+        await deleteItem(id, {updatedAt: '2026-10-01T12:00:00.000Z'});
+
+        const list = await updateItem({id, name: 'Óleo', completed: true, updatedAt: '2026-10-01T11:00:00.000Z'});
+
+        expect(list.items).toEqual([]);
+    });
+
+    it('keeps a newer change when an older delete made offline arrives later', async () => {
+        const id = createId();
+        await addItem({id, name: 'Farinha', completed: false, updatedAt: '2026-10-01T10:00:00.000Z'});
+        await updateItem({id, name: 'Farinha', completed: true, updatedAt: '2026-10-01T12:00:00.000Z'});
+
+        const list = await deleteItem(id, {updatedAt: '2026-10-01T11:00:00.000Z'});
+
+        expect(list.items).toEqual([expect.objectContaining({id, completed: true})]);
+    });
+
     async function addItem(item: ItemInput): Promise<ListResponse> {
         return await json(await send('POST', baseURL, item));
     }
@@ -93,9 +140,20 @@ describe('lists API item changes', () => {
     async function updateItem(item: ItemInput): Promise<ListResponse> {
         return await json(await send('PUT', `${baseURL}/${item.id}`, item));
     }
+
+    async function deleteItem(id: string, body?: {updatedAt: string}): Promise<ListResponse> {
+        return await json(await send('DELETE', `${baseURL}/${id}`, body));
+    }
+
+    async function getList(): Promise<ListResponse> {
+        return await json(await fetch(baseURL.replace(/\/items$/, '')));
+    }
 });
 
-async function send(method: 'POST' | 'PUT', url: string, body: unknown): Promise<Response> {
+async function send(method: 'POST' | 'PUT' | 'DELETE', url: string, body?: unknown): Promise<Response> {
+    if (body === undefined) {
+        return await fetch(url, {method});
+    }
     return await fetch(url, {
         method,
         headers: {'Content-Type': 'application/json'},
