@@ -21,7 +21,7 @@ Use yarn (npm is blocked via `engines`).
 **Layout:** `src/api/<name>/` holds one Lambda each; `src/modules/<domain>/` holds data access and the DynamoDB table definitions for that domain.
 
 - Each API has `index.ts` (Express app, exported for testing), `lambda.ts` (the `serverless-http` handler), and `lambda.yml` (function and routes). `serverless.yml` merges every `lambda.yml` and `resources.yml` via `${file(...)}` — when adding an API or table, register it there and add the table ARN to the IAM statements.
-- Two Lambdas: `api-auth` (`/api/auth/*`, hands everything to Better Auth's `toNodeHandler`) and `api-lists` (`/api/lists/*`).
+- REST Lambdas: `api-auth` (`/api/auth/*`, hands everything to Better Auth's `toNodeHandler`) and `api-lists` (`/api/lists/*`). `src/api/updates/` holds two Lambdas that aren't Express apps (see **Live updates**).
 - Express app setup order matters: helmet → `noCacheControl` → CORS (checked against `settings.trustedOrigins`) → body parsers → routes → `unknownRoute` → `exceptions`. Express 5 forwards rejected async handlers to the error middleware, so handlers just `throw`. `api-auth` has no body parsers, because Better Auth reads the raw request body itself.
 
 **Errors:** throw subclasses of `ApplicationError` from `src/modules/errors` (`NotFoundError`, `BadRequestError`, `ValidationError`, …). The `exceptions` middleware turns them into RFC 7807-style JSON (`type`/`title`/`status`/`detail`). Anything else becomes a 500 `InternalError`, and `ServerError` subclasses hide `detail` from the response.
@@ -39,7 +39,12 @@ Use yarn (npm is blocked via `engines`).
 - Access check: the `/api/lists/:listId` middleware allows the owner, or a user with a share row for that list; otherwise 404.
 - Request bodies are validated with Zod through the local `parse()` helper, which throws `ValidationError`.
 
-**Tests:** `tests-setup.js` creates DynamoDB tables in DynamoDB Local before each test file by parsing the `resources.yml` files it lists (auth and lists) and drops them afterwards, so test files run one at a time (`fileParallelism: false`). `AWS_ENDPOINT_URL_DYNAMODB` in `vitest.config.mjs` points every repository at DynamoDB Local. The adapter test runs Better Auth's `runAdapterTest` suite. API tests (`src/api/lists/index.test.ts`) start the Express app on a random port, call it with `fetch`, and stub only `auth.api.getSession`.
+**Live updates (`src/api/updates/`, `src/modules/updates/`):** open lists hear about changes through an API Gateway **WebSocket API** (`UPDATES_URL`, `wss://…/v1`, set by `serverless.yml`).
+- `GET /api/lists/:listId/updates-ticket` (behind the usual access check) returns `{url, token}`. The token is a 1-minute JWT (`audience: 'list-updates'`, `sub` = user, `list` = resolved list id), because a browser can't send the session cookie or headers when opening a WebSocket to another host. The share-code redeem rejects tokens without `iss`/`jti`, so a ticket can't be redeemed as a share code.
+- `api-updates` handles `$connect` (verifies `?token=`, else 401; stores the connection in `list_connections`, GSI `list_connections_by_list`, TTL `expiresAt`), `$disconnect` (deletes it) and `$default` (client keep-alive pings, ignored).
+- `list-changes` reads the `grocery_lists` DynamoDB Stream (`NEW_IMAGE`) and posts `{type: 'listChanged', updatedAt}` to each connection watching the list (`execute-api:ManageConnections`), once per list per batch with the newest time. Records without `updatedAt` (a list just created empty) are skipped. A `GoneException` deletes the connection; other send failures are only logged, since the message is just a hint for the client to refetch.
+
+**Tests:** `tests-setup.js` creates DynamoDB tables in DynamoDB Local before each test file by parsing the `resources.yml` files it lists (auth, lists, shares and updates) and drops them afterwards, so test files run one at a time (`fileParallelism: false`). `AWS_ENDPOINT_URL_DYNAMODB` in `vitest.config.mjs` points every repository at DynamoDB Local. The adapter test runs Better Auth's `runAdapterTest` suite. API tests (`src/api/lists/index.test.ts`) start the Express app on a random port, call it with `fetch`, and stub only `auth.api.getSession`. `src/api/updates/index.test.ts` calls the handlers directly and stubs `ApiGatewayManagementApiClient.prototype.send`. `vitest.config.mjs` sets a test `JWT_SECRET` and `UPDATES_URL`.
 
 ## Conventions
 

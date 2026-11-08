@@ -1,0 +1,31 @@
+resources:
+  Resources:
+    ListConnectionsTable:
+      Type: AWS::DynamoDB::Table
+      Properties:
+        TableName: list_connections
+        BillingMode: PAY_PER_REQUEST
+        AttributeDefinitions:
+          -
+            AttributeName: id
+            AttributeType: S
+          -
+            AttributeName: list
+            AttributeType: S
+        KeySchema:
+          -
+            AttributeName: id
+            KeyType: HASH
+        GlobalSecondaryIndexes:
+          -
+            IndexName: 'list_connections_by_list'
+            KeySchema:
+              -
+                AttributeName: list
+                KeyType: HASH
+            Projection:
+              ProjectionType: KEYS_ONLY
+        # Removes connections whose disconnect never arrived.
+        TimeToLiveSpecification:
+          AttributeName: expiresAt
+          Enabled: true

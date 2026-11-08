@@ -15,6 +15,10 @@ const settings = {
     listsTable: 'grocery_lists',
     sharesTable: 'list_shares',
     sharesByIdIndex: 'list_shares_by_id',
+    connectionsTable: 'list_connections',
+    connectionsByListIndex: 'list_connections_by_list',
+    /** WebSocket API URL (wss://…, including the stage) that tells open lists when they change. */
+    updatesURL: process.env.UPDATES_URL ?? '',
     jwtSecret: process.env.JWT_SECRET ?? '',
 };
 

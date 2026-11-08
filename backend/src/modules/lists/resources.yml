@@ -13,3 +13,6 @@ resources:
           -
             AttributeName: id
             KeyType: HASH
+        # Every change to a list goes through this stream to the people who have it open (src/api/updates).
+        StreamSpecification:
+          StreamViewType: NEW_IMAGE

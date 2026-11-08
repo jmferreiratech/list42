@@ -1,0 +1,19 @@
+functions:
+  api-updates:
+    handler: src/api/updates/lambda.connection
+    events:
+      - websocket:
+          route: $connect
+      - websocket:
+          route: $disconnect
+      - websocket:
+          route: $default
+  list-changes:
+    handler: src/api/updates/lambda.listChanges
+    events:
+      - stream:
+          type: dynamodb
+          arn: !GetAtt GroceryListsTable.StreamArn
+          batchSize: 100
+          # Notifications are only hints to refetch, so a failing batch is not retried for long.
+          maximumRetryAttempts: 2

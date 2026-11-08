@@ -15,6 +15,7 @@ import {UsersRepository} from '../../modules/auth/repository';
 import {BadRequestError, NotFoundError, UnauthorizedError, ValidationError} from '../../modules/errors';
 import ListsRepository, {type GroceryList} from '../../modules/lists/repository';
 import SharesRepository from '../../modules/shares/repository';
+import {signUpdatesToken} from '../../modules/updates';
 import settings from '../../settings';
 
 const app = express();
@@ -162,6 +163,17 @@ app.delete('/api/lists/:listId/items/:id', async (req, res) => {
     res.send(publicList(result ?? list));
 });
 
+// Where and how to connect to hear about changes to the list (see src/api/updates).
+app.get('/api/lists/:listId/updates-ticket', (req, res) => {
+    const {listId} = req.params;
+    const {user} = res.locals.auth as Session;
+
+    res.json({
+        url: settings.updatesURL,
+        token: signUpdatesToken(settings, {user: user.id, list: listId}),
+    });
+});
+
 interface JwtPayload {
     jti: string;
     iss: GroceryList['id'];
@@ -193,6 +205,10 @@ app.post('/api/lists', async (req, res) => {
         payload = jwt.verify(code, settings.jwtSecret) as JwtPayload;
     } catch (error) {
         logger.warn('JWT verification failed', {message: (error as Error).message, error});
+        throw new BadRequestError('Invalid or expired share code');
+    }
+    // Other tokens signed with the same secret (such as updates tickets) lack these.
+    if (typeof payload.iss !== 'string' || typeof payload.jti !== 'string') {
         throw new BadRequestError('Invalid or expired share code');
     }
 

@@ -17,7 +17,7 @@ export interface GroceryItem {
     updatedAt?: string | null;
 }
 
-interface GroceryList {
+export interface GroceryList {
     id: string;
     items: GroceryItem[];
     createdAt?: string;
@@ -66,6 +66,16 @@ export function groceryListQuery(listId: string) {
 // Each share asks for a new code, so it is not cached.
 export function fetchShareCode(): Promise<string> {
     return request<string>('/mine/share-code');
+}
+
+// Where and how to connect to hear about changes to a list. The token is short-lived, so ask for one per connection.
+export interface UpdatesTicket {
+    url: string;
+    token: string;
+}
+
+export function fetchUpdatesTicket(listId: string): Promise<UpdatesTicket> {
+    return request<UpdatesTicket>(`/${encodeURIComponent(listId)}/updates-ticket`);
 }
 
 // True while any item change to this list is still being saved.
