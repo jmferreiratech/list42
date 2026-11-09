@@ -15,6 +15,7 @@ import {UsersRepository} from '../../modules/auth/repository';
 import {BadRequestError, NotFoundError, UnauthorizedError, ValidationError} from '../../modules/errors';
 import ListsRepository, {type GroceryList} from '../../modules/lists/repository';
 import SharesRepository from '../../modules/shares/repository';
+import {signUpdatesToken} from '../../modules/updates';
 import settings from '../../settings';
 
 const app = express();
@@ -92,13 +93,19 @@ app.use('/api/lists/:listId', async (req, res, next) => {
         }
     }
 
+    next();
+});
+
+// Only the routes that reply with the list load it, after the access check above.
+async function loadList<P extends {listId: string}>(req: express.Request<P>, res: express.Response, next: express.NextFunction) {
+    const {listId} = req.params;
     res.locals.item = await ListsRepository.config(settings)
         .retrieve(listId) ?? {id: listId, items: []};
 
     next();
-});
+}
 
-app.get('/api/lists/:listId', (_req, res) => {
+app.get('/api/lists/:listId', loadList, (_req, res) => {
     const result = res.locals.item as GroceryList;
 
     res.send(publicList(result));
@@ -112,7 +119,7 @@ const GroceryListItemInputSchema = z.object({
     updatedBy: z.string().optional(),
 });
 
-app.post('/api/lists/:listId/items', async (req, res) => {
+app.post('/api/lists/:listId/items', loadList, async (req, res) => {
     const {listId} = req.params;
     const {user} = res.locals.auth as Session;
     const list = res.locals.item as GroceryList;
@@ -128,7 +135,7 @@ app.post('/api/lists/:listId/items', async (req, res) => {
     res.send(publicList(result ?? list));
 });
 
-app.put('/api/lists/:listId/items/:id', async (req, res) => {
+app.put('/api/lists/:listId/items/:id', loadList, async (req, res) => {
     const {listId, id} = req.params;
     const {user} = res.locals.auth as Session;
     const list = res.locals.item as GroceryList;
@@ -150,7 +157,7 @@ const GroceryListItemDeleteSchema = z.object({
     updatedAt: z.string().datetime().optional(),
 }).optional();
 
-app.delete('/api/lists/:listId/items/:id', async (req, res) => {
+app.delete('/api/lists/:listId/items/:id', loadList, async (req, res) => {
     const {listId, id} = req.params;
     const {user} = res.locals.auth as Session;
     const list = res.locals.item as GroceryList;
@@ -160,6 +167,17 @@ app.delete('/api/lists/:listId/items/:id', async (req, res) => {
         .deleteItem(listId, id, changeTime(change?.updatedAt), user.id);
 
     res.send(publicList(result ?? list));
+});
+
+// Where and how to connect to hear about changes to the list (see src/api/updates).
+app.get('/api/lists/:listId/updates-ticket', (req, res) => {
+    const {listId} = req.params;
+    const {user} = res.locals.auth as Session;
+
+    res.json({
+        url: settings.updatesURL,
+        token: signUpdatesToken(settings, {user: user.id, list: listId}),
+    });
 });
 
 interface JwtPayload {
@@ -193,6 +211,10 @@ app.post('/api/lists', async (req, res) => {
         payload = jwt.verify(code, settings.jwtSecret) as JwtPayload;
     } catch (error) {
         logger.warn('JWT verification failed', {message: (error as Error).message, error});
+        throw new BadRequestError('Invalid or expired share code');
+    }
+    // Other tokens signed with the same secret (such as updates tickets) lack these.
+    if (typeof payload.iss !== 'string' || typeof payload.jti !== 'string') {
         throw new BadRequestError('Invalid or expired share code');
     }
 

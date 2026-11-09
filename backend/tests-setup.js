@@ -15,6 +15,8 @@ afterAll(async () => {
 const resourceFiles = [
     './src/modules/auth/resources.yml',
     './src/modules/lists/resources.yml',
+    './src/modules/shares/resources.yml',
+    './src/modules/updates/resources.yml',
 ];
 
 const ddbTables = resourceFiles

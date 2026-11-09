@@ -1,6 +1,6 @@
 import { cleanup, fireEvent, render, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import { delay, http, HttpResponse } from 'msw';
+import { delay, http, HttpResponse, ws } from 'msw';
 import { setupServer } from 'msw/node';
 import { focusManager, onlineManager, QueryClientProvider } from '@tanstack/react-query';
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it } from 'vitest';
@@ -539,6 +539,144 @@ describe('App', () => {
     });
   });
 
+  describe('live changes', () => {
+    // Serves the list as it is now, counts the times it is asked for, and hands over each live connection.
+    function serveLiveList(initial: {version: number; items: GroceryItem[]}) {
+      const state = {
+        list: initial,
+        gets: 0,
+        get connections() {
+          return liveConnections;
+        },
+      };
+      server.use(
+        http.get(`${settings.baseURL}/auth/get-session`, () => HttpResponse.json({user: {id: 'foo'}, session: {}})),
+        http.get(`${settings.baseURL}/lists`, () => HttpResponse.json([{id: 'mine', name: 'Minha Lista'}])),
+        http.get(`${settings.baseURL}/lists/mine`, () => {
+          state.gets++;
+          return HttpResponse.json({id: 'mine', ...state.list});
+        }),
+      );
+      return state;
+    }
+
+    function tellChanged(client: LiveClient | undefined, version: number) {
+      client?.send(JSON.stringify({type: 'listChanged', version}));
+    }
+
+    const leite = {id: 'leite', name: 'Leite', completed: false, updatedAt: '2026-10-01T10:00:00.000Z'};
+    const pao = {id: 'pao', name: 'Pão', completed: false, updatedAt: '2026-10-01T11:00:00.000Z'};
+
+    it('shows an item the other person added as soon as the change is told', async () => {
+      const state = serveLiveList({version: 1, items: [leite]});
+      const {q} = renderWithProviders(<App />);
+      await q.findByText('Leite');
+      await waitFor(() => expect(state.connections).toHaveLength(1));
+
+      state.list = {version: 2, items: [leite, pao]};
+      tellChanged(state.connections[0], 2);
+
+      expect(await q.findByText('Pão')).toBeInTheDocument();
+    });
+
+    it('does not ask for the list again for a change it already has', async () => {
+      const state = serveLiveList({version: 2, items: [leite, pao]});
+      const {q} = renderWithProviders(<App />);
+      await q.findByText('Pão');
+      await waitFor(() => expect(state.connections).toHaveLength(1));
+      await delay(100);
+      const getsBefore = state.gets;
+
+      // Such as the user's own change, whose reply already brought the list with it.
+      tellChanged(state.connections[0], 2);
+      tellChanged(state.connections[0], 1);
+      await delay(100);
+      expect(state.gets).toBe(getsBefore);
+
+      tellChanged(state.connections[0], 3);
+      await waitFor(() => expect(state.gets).toBe(getsBefore + 1));
+    });
+
+    it('ignores a message that is not a change', async () => {
+      const state = serveLiveList({version: 2, items: [leite, pao]});
+      const {q} = renderWithProviders(<App />);
+      await q.findByText('Pão');
+      await waitFor(() => expect(state.connections).toHaveLength(1));
+      await delay(100);
+      const getsBefore = state.gets;
+
+      state.connections[0]?.send(JSON.stringify({type: 'listChanged', version: '3'}));
+      state.connections[0]?.send(JSON.stringify({type: 'somethingElse', version: 3}));
+      state.connections[0]?.send('not json');
+      await delay(100);
+
+      expect(state.gets).toBe(getsBefore);
+    });
+
+    it('tries again when the connection can\'t even be started', async () => {
+      const state = serveLiveList({version: 1, items: [leite]});
+      // Browsers throw right away for a URL they can't use, such as an empty one.
+      // MSW's mock is a read-only global, so it is swapped by redefining it.
+      const mockDescriptor = Object.getOwnPropertyDescriptor(globalThis, 'WebSocket')!;
+      let attempts = 0;
+      Object.defineProperty(globalThis, 'WebSocket', {
+        configurable: true,
+        value: new Proxy(globalThis.WebSocket, {
+          construct(target, args: ConstructorParameters<typeof WebSocket>) {
+            attempts++;
+            if (attempts === 1) throw new SyntaxError('Invalid URL');
+            return new target(...args);
+          },
+        }),
+      });
+      try {
+        const {q} = renderWithProviders(<App />);
+        await q.findByText('Leite');
+
+        await waitFor(() => expect(state.connections).toHaveLength(1), {timeout: 3000});
+        expect(attempts).toBe(2);
+      } finally {
+        Object.defineProperty(globalThis, 'WebSocket', mockDescriptor);
+      }
+    });
+
+    it('picks up what changed while another list was open', async () => {
+      const state = serveLiveList({version: 1, items: [leite]});
+      server.use(
+        http.get(`${settings.baseURL}/lists`, () => HttpResponse.json([{id: 'mine', name: 'Minha Lista'}, {id: 'shared-list', name: 'Lista da Ana'}])),
+        http.get(`${settings.baseURL}/lists/shared-list`, () => HttpResponse.json({id: 'shared-list', version: 1, items: []})),
+      );
+      const {q, user} = renderWithProviders(<App />);
+      await q.findByText('Leite');
+      await waitFor(() => expect(state.connections).toHaveLength(1));
+
+      await user.click(document.getElementById('list-selector')!);
+      await user.click(await q.findByRole('option', {name: 'Lista da Ana'}));
+      await waitFor(() => expect(q.queryByText('Leite')).not.toBeInTheDocument());
+      // Saved while the list wasn't open, so nobody was told.
+      state.list = {version: 2, items: [leite, pao]};
+
+      // The list is shown from the cache, which is not fetched again on its own.
+      await user.click(document.getElementById('list-selector')!);
+      await user.click(await q.findByRole('option', {name: 'Minha Lista'}));
+
+      expect(await q.findByText('Pão')).toBeInTheDocument();
+    });
+
+    it('connects again after the connection drops, and picks up what changed meanwhile', async () => {
+      const state = serveLiveList({version: 1, items: [leite]});
+      const {q} = renderWithProviders(<App />);
+      await q.findByText('Leite');
+      await waitFor(() => expect(state.connections).toHaveLength(1));
+
+      state.connections[0]?.close();
+      state.list = {version: 2, items: [leite, pao]};
+
+      await waitFor(() => expect(state.connections).toHaveLength(2), {timeout: 3000});
+      expect(await q.findByText('Pão')).toBeInTheDocument();
+    });
+  });
+
   describe('offline', () => {
     it('shows the last loaded list when the app opens without network', async () => {
       mockSignedInUser({items: [{id: 'item1', name: 'Leite', completed: false}]});
@@ -693,7 +831,21 @@ function mockSignedInUser({items, lists = [{id: 'mine', name: 'Minha Lista'}]}: 
   );
 }
 
-const server = setupServer();
+// Every open list connects for live changes. The connections are kept here, so a test can send on them or close them;
+// otherwise they never tell anything.
+const liveUpdates = ws.link('ws://localhost:12345/updates');
+type LiveClient = Parameters<Parameters<typeof liveUpdates.addEventListener<'connection'>>[1]>[0]['client'];
+let liveConnections: LiveClient[] = [];
+const liveUpdatesHandlers = [
+  http.get(`${settings.baseURL}/lists/:listId/updates-ticket`, () => {
+    return HttpResponse.json({url: 'ws://localhost:12345/updates', token: 'test-token'});
+  }),
+  liveUpdates.addEventListener('connection', ({client}) => {
+    liveConnections.push(client);
+  }),
+];
+
+const server = setupServer(...liveUpdatesHandlers);
 
 let unhandledRequests: string[] = [];
 
@@ -705,6 +857,7 @@ beforeAll(() => server.listen({
 
 beforeEach(() => {
   unhandledRequests = [];
+  liveConnections = [];
 });
 
 afterEach(() => {

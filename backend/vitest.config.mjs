@@ -6,6 +6,8 @@ const env = loadEnv('tests', process.cwd(), '');
 export default defineConfig({
     test: {
         env: {
+            JWT_SECRET: 'tests',
+            UPDATES_URL: 'wss://updates.test/v1',
             ...env,
             AWS_ACCESS_KEY_ID: 'offline',
             AWS_SECRET_ACCESS_KEY: 'offline',

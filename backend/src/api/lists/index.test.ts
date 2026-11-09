@@ -5,6 +5,8 @@ import {afterAll, beforeAll, beforeEach, describe, expect, it, vi} from 'vitest'
 
 import app from '.';
 import auth from '../../modules/auth';
+import {verifyUpdatesToken} from '../../modules/updates';
+import settings from '../../settings';
 
 type AuthSession = NonNullable<Awaited<ReturnType<typeof auth.api.getSession>>>;
 
@@ -17,6 +19,7 @@ interface ItemInput {
 
 interface ListResponse {
     items: (ItemInput & {updatedAt: string})[];
+    version?: number;
 }
 
 describe('lists API item changes', () => {
@@ -133,6 +136,16 @@ describe('lists API item changes', () => {
         expect(list.items).toEqual([expect.objectContaining({id, completed: true})]);
     });
 
+    it('counts up the list version for each saved change, but not for an ignored one', async () => {
+        const id = createId();
+        const added = await addItem({id, name: 'Uva', completed: false, updatedAt: '2026-10-01T10:00:00.000Z'});
+        const updated = await updateItem({id, name: 'Uva', completed: true, updatedAt: '2026-10-01T12:00:00.000Z'});
+        const ignored = await updateItem({id, name: 'Uva', completed: false, updatedAt: '2026-10-01T11:00:00.000Z'});
+        const deleted = await deleteItem(id, {updatedAt: '2026-10-01T13:00:00.000Z'});
+
+        expect([added.version, updated.version, ignored.version, deleted.version]).toEqual([1, 2, 2, 3]);
+    });
+
     async function addItem(item: ItemInput): Promise<ListResponse> {
         return await json(await send('POST', baseURL, item));
     }
@@ -148,6 +161,45 @@ describe('lists API item changes', () => {
     async function getList(): Promise<ListResponse> {
         return await json(await fetch(baseURL.replace(/\/items$/, '')));
     }
+});
+
+describe('lists API updates ticket', () => {
+    let server: Server;
+    let baseURL: string;
+    let userId: string;
+
+    beforeAll(async () => {
+        server = app.listen(0);
+        await new Promise(resolve => server.once('listening', resolve));
+        baseURL = `http://localhost:${String((server.address() as AddressInfo).port)}/api/lists`;
+    });
+
+    afterAll(() => {
+        server.close();
+    });
+
+    beforeEach(() => {
+        userId = createId();
+        vi.spyOn(auth.api, 'getSession').mockResolvedValue({
+            user: {id: userId},
+            session: {},
+        } as AuthSession);
+    });
+
+    it('gives where to connect and a token for the user\'s own list', async () => {
+        const response = await fetch(`${baseURL}/mine/updates-ticket`);
+
+        expect(response.status).toBe(200);
+        const ticket = await response.json() as {url: string; token: string};
+        expect(ticket.url).toBe(settings.updatesURL);
+        expect(verifyUpdatesToken(settings, ticket.token)).toEqual({user: userId, list: userId});
+    });
+
+    it('gives no ticket for a list the user can\'t see', async () => {
+        const response = await fetch(`${baseURL}/${createId()}/updates-ticket`);
+
+        expect(response.status).toBe(404);
+    });
 });
 
 async function send(method: 'POST' | 'PUT' | 'DELETE', url: string, body?: unknown): Promise<Response> {

@@ -21,13 +21,14 @@ import {
     Typography
 } from '@mui/material';
 import { createId } from '@paralleldrive/cuid2';
-import { useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { TransitionGroup } from "react-transition-group";
-import { useIsRestoring, useQuery } from '@tanstack/react-query';
+import { useIsRestoring, useQuery, useQueryClient } from '@tanstack/react-query';
 import {
     GroceryItem,
+    GroceryList as GroceryListData,
     groceryListQuery,
     useAddItem,
     useDeleteItem,
@@ -35,11 +36,14 @@ import {
     useUnsentItemIds,
     useUpdateItem,
 } from '../api';
+import useListUpdates from '../hooks/useListUpdates.ts';
 import { HorizontalSwipeRegion } from './SwipeRegion.tsx';
 import { useToast } from './Toast.tsx';
 
-// Picks up changes made by the other person on a shared list.
+// Picks up changes made by the other person on a shared list when the live connection is down.
 const LIST_POLLING_INTERVAL_MS = 30_000;
+// While connected, changes are told right away. Polling stays as a safety net for a missed message.
+const LIVE_LIST_POLLING_INTERVAL_MS = 5 * 60_000;
 
 export default function GroceryList({ listId = 'mine' }: { listId?: string }) {
     const { t } = useTranslation();
@@ -310,12 +314,13 @@ function useItemsList(listId: string = 'mine') {
     const isSavingItems = useIsSavingItems(listId);
     // Queries wait while the saved lists are restored, so the list is still loading then.
     const isRestoring = useIsRestoring();
+    const isLive = useLiveListRefresh(listId, isSavingItems);
     const { data: groceryListData, isLoading, isError, refetch } = useQuery({
         ...groceryListQuery(listId),
         // Paused while changes are being saved, so a refetch can't show the list from before them.
         // Polling also stops while the app is in the background.
         refetchOnMount: !isSavingItems,
-        refetchInterval: isSavingItems ? false : LIST_POLLING_INTERVAL_MS,
+        refetchInterval: isSavingItems ? false : isLive ? LIVE_LIST_POLLING_INTERVAL_MS : LIST_POLLING_INTERVAL_MS,
         refetchOnWindowFocus: isSavingItems ? false : 'always',
         refetchOnReconnect: isSavingItems ? false : 'always',
     });
@@ -584,4 +589,39 @@ function isSameItemName(a: string, b: string): boolean {
 
 function normalizeItemName(name: string): string {
     return name.trim().normalize('NFD').replace(/\p{Diacritic}/gu, '').toLocaleLowerCase('pt-BR');
+}
+
+// A change told by the live connection: the list's version after it, or null when changes may have been missed.
+interface LiveChange {
+    version: number | null;
+}
+
+// Refetches the list when the live connection tells it changed, unless the list on screen already has
+// that change, as it does for the user's own. While changes are being saved it waits, since a refetch could
+// show the list from before them; the reply to the last of them may already bring the told change.
+// Returns whether the live connection is open.
+function useLiveListRefresh(listId: string, isSavingItems: boolean): boolean {
+    const queryClient = useQueryClient();
+    const [liveChange, setLiveChange] = useState<LiveChange | null>(null);
+    const isLive = useListUpdates(listId, version => setLiveChange(pending => mergeLiveChanges(pending, { version })));
+
+    useEffect(() => {
+        if (!liveChange || isSavingItems) return;
+        setLiveChange(null);
+        const { queryKey } = groceryListQuery(listId);
+        const cachedVersion = queryClient.getQueryData<GroceryListData>(queryKey)?.version;
+        // Versions grow in the order changes were stored, so unlike times they can't skip a change saved meanwhile.
+        const alreadyHasIt = liveChange.version !== null && cachedVersion !== undefined && cachedVersion >= liveChange.version;
+        if (!alreadyHasIt) {
+            queryClient.invalidateQueries({ queryKey });
+        }
+    }, [listId, liveChange, isSavingItems, queryClient]);
+
+    return isLive;
+}
+
+function mergeLiveChanges(pending: LiveChange | null, change: LiveChange): LiveChange {
+    if (!pending) return change;
+    if (pending.version === null || change.version === null) return { version: null };
+    return { version: Math.max(pending.version, change.version) };
 }
