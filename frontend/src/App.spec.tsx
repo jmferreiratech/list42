@@ -540,20 +540,21 @@ describe('App', () => {
   });
 
   describe('live changes', () => {
-    type LiveClient = Parameters<Parameters<typeof liveUpdates.addEventListener<'connection'>>[1]>[0]['client'];
-
     // Serves the list as it is now, counts the times it is asked for, and hands over each live connection.
     function serveLiveList(initial: {version: number; items: GroceryItem[]}) {
-      const state = {list: initial, gets: 0, connections: [] as LiveClient[]};
+      const state = {
+        list: initial,
+        gets: 0,
+        get connections() {
+          return liveConnections;
+        },
+      };
       server.use(
         http.get(`${settings.baseURL}/auth/get-session`, () => HttpResponse.json({user: {id: 'foo'}, session: {}})),
         http.get(`${settings.baseURL}/lists`, () => HttpResponse.json([{id: 'mine', name: 'Minha Lista'}])),
         http.get(`${settings.baseURL}/lists/mine`, () => {
           state.gets++;
           return HttpResponse.json({id: 'mine', ...state.list});
-        }),
-        liveUpdates.addEventListener('connection', ({client}) => {
-          state.connections.push(client);
         }),
       );
       return state;
@@ -584,17 +585,16 @@ describe('App', () => {
       await q.findByText('Pão');
       await waitFor(() => expect(state.connections).toHaveLength(1));
       await delay(100);
-      // Opening the list fetches it once; connecting for the first time doesn't fetch it again.
-      expect(state.gets).toBe(1);
+      const getsBefore = state.gets;
 
       // Such as the user's own change, whose reply already brought the list with it.
       tellChanged(state.connections[0], 2);
       tellChanged(state.connections[0], 1);
       await delay(100);
-      expect(state.gets).toBe(1);
+      expect(state.gets).toBe(getsBefore);
 
       tellChanged(state.connections[0], 3);
-      await waitFor(() => expect(state.gets).toBe(2));
+      await waitFor(() => expect(state.gets).toBe(getsBefore + 1));
     });
 
     it('ignores a message that is not a change', async () => {
@@ -602,13 +602,15 @@ describe('App', () => {
       const {q} = renderWithProviders(<App />);
       await q.findByText('Pão');
       await waitFor(() => expect(state.connections).toHaveLength(1));
+      await delay(100);
+      const getsBefore = state.gets;
 
       state.connections[0]?.send(JSON.stringify({type: 'listChanged', version: '3'}));
       state.connections[0]?.send(JSON.stringify({type: 'somethingElse', version: 3}));
       state.connections[0]?.send('not json');
       await delay(100);
 
-      expect(state.gets).toBe(1);
+      expect(state.gets).toBe(getsBefore);
     });
 
     it('tries again when the connection can\'t even be started', async () => {
@@ -636,6 +638,29 @@ describe('App', () => {
       } finally {
         Object.defineProperty(globalThis, 'WebSocket', mockDescriptor);
       }
+    });
+
+    it('picks up what changed while another list was open', async () => {
+      const state = serveLiveList({version: 1, items: [leite]});
+      server.use(
+        http.get(`${settings.baseURL}/lists`, () => HttpResponse.json([{id: 'mine', name: 'Minha Lista'}, {id: 'shared-list', name: 'Lista da Ana'}])),
+        http.get(`${settings.baseURL}/lists/shared-list`, () => HttpResponse.json({id: 'shared-list', version: 1, items: []})),
+      );
+      const {q, user} = renderWithProviders(<App />);
+      await q.findByText('Leite');
+      await waitFor(() => expect(state.connections).toHaveLength(1));
+
+      await user.click(document.getElementById('list-selector')!);
+      await user.click(await q.findByRole('option', {name: 'Lista da Ana'}));
+      await waitFor(() => expect(q.queryByText('Leite')).not.toBeInTheDocument());
+      // Saved while the list wasn't open, so nobody was told.
+      state.list = {version: 2, items: [leite, pao]};
+
+      // The list is shown from the cache, which is not fetched again on its own.
+      await user.click(document.getElementById('list-selector')!);
+      await user.click(await q.findByRole('option', {name: 'Minha Lista'}));
+
+      expect(await q.findByText('Pão')).toBeInTheDocument();
     });
 
     it('connects again after the connection drops, and picks up what changed meanwhile', async () => {
@@ -806,13 +831,18 @@ function mockSignedInUser({items, lists = [{id: 'mine', name: 'Minha Lista'}]}: 
   );
 }
 
-// Every open list connects for live changes. By default the connection opens and never tells anything.
+// Every open list connects for live changes. The connections are kept here, so a test can send on them or close them;
+// otherwise they never tell anything.
 const liveUpdates = ws.link('ws://localhost:12345/updates');
+type LiveClient = Parameters<Parameters<typeof liveUpdates.addEventListener<'connection'>>[1]>[0]['client'];
+let liveConnections: LiveClient[] = [];
 const liveUpdatesHandlers = [
   http.get(`${settings.baseURL}/lists/:listId/updates-ticket`, () => {
     return HttpResponse.json({url: 'ws://localhost:12345/updates', token: 'test-token'});
   }),
-  liveUpdates.addEventListener('connection', () => {}),
+  liveUpdates.addEventListener('connection', ({client}) => {
+    liveConnections.push(client);
+  }),
 ];
 
 const server = setupServer(...liveUpdatesHandlers);
@@ -827,6 +857,7 @@ beforeAll(() => server.listen({
 
 beforeEach(() => {
   unhandledRequests = [];
+  liveConnections = [];
 });
 
 afterEach(() => {

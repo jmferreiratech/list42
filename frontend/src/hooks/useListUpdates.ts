@@ -14,8 +14,9 @@ interface ListChangedMessage {
 
 /**
  * Keeps a connection open that tells when the list changes, and reconnects with a growing delay when it drops.
- * `onChange` gets the list's version after the change, or null when changes may have been missed (each time it
- * connects again after a drop; the first connection follows the list's own fetch).
+ * `onChange` gets the list's version after the change, or null when changes may have been missed: each time it
+ * connects, since a list opened from the cache isn't fetched on its own, and a change saved before the connection
+ * was stored isn't told.
  * Returns whether the connection is open.
  */
 export default function useListUpdates(listId: string, onChange: (version: number | null) => void): boolean {
@@ -35,7 +36,6 @@ export default function useListUpdates(listId: string, onChange: (version: numbe
         let stopped = false;
         let socket: WebSocket | null = null;
         let retryDelay = FIRST_RETRY_DELAY_MS;
-        let hasConnected = false;
         let retryTimer: ReturnType<typeof setTimeout> | undefined;
         let pingTimer: ReturnType<typeof setInterval> | undefined;
 
@@ -57,24 +57,23 @@ export default function useListUpdates(listId: string, onChange: (version: numbe
             }
 
             socket = current;
-            current.onopen = () => {
+            current.addEventListener('open', () => {
                 retryDelay = FIRST_RETRY_DELAY_MS;
                 setIsConnected(true);
                 pingTimer = setInterval(() => current.send(JSON.stringify({ action: 'ping' })), PING_INTERVAL_MS);
                 // Changes made while it was not connected were not told.
-                if (hasConnected) onChangeRef.current(null);
-                hasConnected = true;
-            };
-            current.onmessage = event => {
+                onChangeRef.current(null);
+            });
+            current.addEventListener('message', event => {
                 const message = parseMessage(event.data);
                 if (message) onChangeRef.current(message.version);
-            };
+            });
             // Also follows a failed attempt, and the server's 2-hour limit per connection.
-            current.onclose = () => {
+            current.addEventListener('close', () => {
                 clearInterval(pingTimer);
                 setIsConnected(false);
                 if (!stopped) retryLater();
-            };
+            });
         }
 
         connect();
