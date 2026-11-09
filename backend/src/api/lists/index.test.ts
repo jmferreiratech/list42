@@ -19,6 +19,7 @@ interface ItemInput {
 
 interface ListResponse {
     items: (ItemInput & {updatedAt: string})[];
+    version?: number;
 }
 
 describe('lists API item changes', () => {
@@ -133,6 +134,16 @@ describe('lists API item changes', () => {
         const list = await deleteItem(id, {updatedAt: '2026-10-01T11:00:00.000Z'});
 
         expect(list.items).toEqual([expect.objectContaining({id, completed: true})]);
+    });
+
+    it('counts up the list version for each saved change, but not for an ignored one', async () => {
+        const id = createId();
+        const added = await addItem({id, name: 'Uva', completed: false, updatedAt: '2026-10-01T10:00:00.000Z'});
+        const updated = await updateItem({id, name: 'Uva', completed: true, updatedAt: '2026-10-01T12:00:00.000Z'});
+        const ignored = await updateItem({id, name: 'Uva', completed: false, updatedAt: '2026-10-01T11:00:00.000Z'});
+        const deleted = await deleteItem(id, {updatedAt: '2026-10-01T13:00:00.000Z'});
+
+        expect([added.version, updated.version, ignored.version, deleted.version]).toEqual([1, 2, 2, 3]);
     });
 
     async function addItem(item: ItemInput): Promise<ListResponse> {

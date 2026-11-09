@@ -543,7 +543,7 @@ describe('App', () => {
     type LiveClient = Parameters<Parameters<typeof liveUpdates.addEventListener<'connection'>>[1]>[0]['client'];
 
     // Serves the list as it is now, counts the times it is asked for, and hands over each live connection.
-    function serveLiveList(initial: {updatedAt: string; items: GroceryItem[]}) {
+    function serveLiveList(initial: {version: number; items: GroceryItem[]}) {
       const state = {list: initial, gets: 0, connections: [] as LiveClient[]};
       server.use(
         http.get(`${settings.baseURL}/auth/get-session`, () => HttpResponse.json({user: {id: 'foo'}, session: {}})),
@@ -559,51 +559,93 @@ describe('App', () => {
       return state;
     }
 
-    function tellChanged(client: LiveClient | undefined, updatedAt: string) {
-      client?.send(JSON.stringify({type: 'listChanged', updatedAt}));
+    function tellChanged(client: LiveClient | undefined, version: number) {
+      client?.send(JSON.stringify({type: 'listChanged', version}));
     }
 
     const leite = {id: 'leite', name: 'Leite', completed: false, updatedAt: '2026-10-01T10:00:00.000Z'};
     const pao = {id: 'pao', name: 'Pão', completed: false, updatedAt: '2026-10-01T11:00:00.000Z'};
 
     it('shows an item the other person added as soon as the change is told', async () => {
-      const state = serveLiveList({updatedAt: '2026-10-01T10:00:00.000Z', items: [leite]});
+      const state = serveLiveList({version: 1, items: [leite]});
       const {q} = renderWithProviders(<App />);
       await q.findByText('Leite');
       await waitFor(() => expect(state.connections).toHaveLength(1));
 
-      state.list = {updatedAt: '2026-10-01T11:00:00.000Z', items: [leite, pao]};
-      tellChanged(state.connections[0], '2026-10-01T11:00:00.000Z');
+      state.list = {version: 2, items: [leite, pao]};
+      tellChanged(state.connections[0], 2);
 
       expect(await q.findByText('Pão')).toBeInTheDocument();
     });
 
     it('does not ask for the list again for a change it already has', async () => {
-      const state = serveLiveList({updatedAt: '2026-10-01T11:00:00.000Z', items: [leite, pao]});
+      const state = serveLiveList({version: 2, items: [leite, pao]});
       const {q} = renderWithProviders(<App />);
       await q.findByText('Pão');
       await waitFor(() => expect(state.connections).toHaveLength(1));
       await delay(100);
-      const getsBefore = state.gets;
+      // Opening the list fetches it once; connecting for the first time doesn't fetch it again.
+      expect(state.gets).toBe(1);
 
       // Such as the user's own change, whose reply already brought the list with it.
-      tellChanged(state.connections[0], '2026-10-01T11:00:00.000Z');
-      tellChanged(state.connections[0], '2026-10-01T10:30:00.000Z');
+      tellChanged(state.connections[0], 2);
+      tellChanged(state.connections[0], 1);
       await delay(100);
-      expect(state.gets).toBe(getsBefore);
+      expect(state.gets).toBe(1);
 
-      tellChanged(state.connections[0], '2026-10-01T12:00:00.000Z');
-      await waitFor(() => expect(state.gets).toBe(getsBefore + 1));
+      tellChanged(state.connections[0], 3);
+      await waitFor(() => expect(state.gets).toBe(2));
+    });
+
+    it('ignores a message that is not a change', async () => {
+      const state = serveLiveList({version: 2, items: [leite, pao]});
+      const {q} = renderWithProviders(<App />);
+      await q.findByText('Pão');
+      await waitFor(() => expect(state.connections).toHaveLength(1));
+
+      state.connections[0]?.send(JSON.stringify({type: 'listChanged', version: '3'}));
+      state.connections[0]?.send(JSON.stringify({type: 'somethingElse', version: 3}));
+      state.connections[0]?.send('not json');
+      await delay(100);
+
+      expect(state.gets).toBe(1);
+    });
+
+    it('tries again when the connection can\'t even be started', async () => {
+      const state = serveLiveList({version: 1, items: [leite]});
+      // Browsers throw right away for a URL they can't use, such as an empty one.
+      // MSW's mock is a read-only global, so it is swapped by redefining it.
+      const mockDescriptor = Object.getOwnPropertyDescriptor(globalThis, 'WebSocket')!;
+      let attempts = 0;
+      Object.defineProperty(globalThis, 'WebSocket', {
+        configurable: true,
+        value: new Proxy(globalThis.WebSocket, {
+          construct(target, args: ConstructorParameters<typeof WebSocket>) {
+            attempts++;
+            if (attempts === 1) throw new SyntaxError('Invalid URL');
+            return new target(...args);
+          },
+        }),
+      });
+      try {
+        const {q} = renderWithProviders(<App />);
+        await q.findByText('Leite');
+
+        await waitFor(() => expect(state.connections).toHaveLength(1), {timeout: 3000});
+        expect(attempts).toBe(2);
+      } finally {
+        Object.defineProperty(globalThis, 'WebSocket', mockDescriptor);
+      }
     });
 
     it('connects again after the connection drops, and picks up what changed meanwhile', async () => {
-      const state = serveLiveList({updatedAt: '2026-10-01T10:00:00.000Z', items: [leite]});
+      const state = serveLiveList({version: 1, items: [leite]});
       const {q} = renderWithProviders(<App />);
       await q.findByText('Leite');
       await waitFor(() => expect(state.connections).toHaveLength(1));
 
       state.connections[0]?.close();
-      state.list = {updatedAt: '2026-10-01T11:00:00.000Z', items: [leite, pao]};
+      state.list = {version: 2, items: [leite, pao]};
 
       await waitFor(() => expect(state.connections).toHaveLength(2), {timeout: 3000});
       expect(await q.findByText('Pão')).toBeInTheDocument();

@@ -4,7 +4,11 @@ import {handleConnectionEvent, handleListChanges, type WebSocketEvent} from './i
 import logger from '../../logger';
 
 export const connection = async (event: WebSocketEvent) => {
-    logger.debug('Received WebSocket event', {event});
+    // Not the whole event: its query string holds the connect token, which must not reach the logs.
+    logger.debug('Received WebSocket event', {
+        eventType: event.requestContext.eventType,
+        connectionId: event.requestContext.connectionId,
+    });
 
     return await handleConnectionEvent(event);
 };

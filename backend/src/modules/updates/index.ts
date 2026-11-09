@@ -42,34 +42,55 @@ export function verifyUpdatesToken(settings: Settings, token: string | undefined
 
 export interface ListChangedMessage {
     type: 'listChanged';
-    /** The list's updatedAt after the change, so a client that already has it can skip the refetch. */
-    updatedAt: string | null;
+    /** The list's version after the change, so a client that already has it can skip the refetch. */
+    version: number;
 }
 
-// Tells every connection watching the list that it changed. The message is only a hint to refetch,
-// so a connection that can't be reached is skipped instead of failing the others.
-export async function notifyListChanged(settings: Settings, list: string, updatedAt: string | null): Promise<void> {
-    const connections = ConnectionsRepository.config(settings);
-    const ids = await connections.listIdsByList(list);
-    if (!ids.length) {
-        return;
+// Tells connections watching a list that it changed. Create one per invocation and reuse it for every list,
+// so its clients are set up once. A message is only a hint to refetch, so a connection that can't be reached
+// is skipped instead of failing the others (or the stream batch, whose retry would tell everyone again).
+export class ListChangeNotifier {
+    private readonly connections: ConnectionsRepository;
+    private readonly client: ApiGatewayManagementApiClient;
+
+    static config(settings: Settings) {
+        return new ListChangeNotifier(
+            ConnectionsRepository.config(settings),
+            new ApiGatewayManagementApiClient({endpoint: managementEndpoint(settings.updatesURL)}),
+        );
     }
 
-    const client = new ApiGatewayManagementApiClient({endpoint: managementEndpoint(settings.updatesURL)});
-    const message: ListChangedMessage = {type: 'listChanged', updatedAt};
-    const Data = JSON.stringify(message);
+    async notify(list: string, version: number): Promise<void> {
+        const ids = await this.connections.listIdsByList(list);
+        const message: ListChangedMessage = {type: 'listChanged', version};
+        const Data = JSON.stringify(message);
 
-    await Promise.all(ids.map(async (ConnectionId) => {
-        try {
-            await client.send(new PostToConnectionCommand({ConnectionId, Data}));
-        } catch (error) {
-            if (error instanceof GoneException) {
-                await connections.remove(ConnectionId);
-                return;
+        await Promise.all(ids.map(async (ConnectionId) => {
+            try {
+                await this.client.send(new PostToConnectionCommand({ConnectionId, Data}));
+            } catch (error) {
+                if (error instanceof GoneException) {
+                    await this.forget(ConnectionId);
+                    return;
+                }
+                logger.error('Failed to notify connection', {ConnectionId, list, error});
             }
-            logger.error('Failed to notify connection', {ConnectionId, list, error});
+        }));
+    }
+
+    // If this fails, the row's TTL removes it later.
+    private async forget(ConnectionId: string): Promise<void> {
+        try {
+            await this.connections.remove(ConnectionId);
+        } catch (error) {
+            logger.error('Failed to remove a gone connection', {ConnectionId, error});
         }
-    }));
+    }
+
+    constructor(connections: ConnectionsRepository, client: ApiGatewayManagementApiClient) {
+        this.connections = connections;
+        this.client = client;
+    }
 }
 
 // Messages are posted over HTTPS to the same API the clients connect to.

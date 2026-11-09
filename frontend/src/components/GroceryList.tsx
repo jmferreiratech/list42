@@ -591,9 +591,9 @@ function normalizeItemName(name: string): string {
     return name.trim().normalize('NFD').replace(/\p{Diacritic}/gu, '').toLocaleLowerCase('pt-BR');
 }
 
-// A change told by the live connection: the list's time after it, or null when changes may have been missed.
+// A change told by the live connection: the list's version after it, or null when changes may have been missed.
 interface LiveChange {
-    updatedAt: string | null;
+    version: number | null;
 }
 
 // Refetches the list when the live connection tells it changed, unless the list on screen already has
@@ -603,14 +603,15 @@ interface LiveChange {
 function useLiveListRefresh(listId: string, isSavingItems: boolean): boolean {
     const queryClient = useQueryClient();
     const [liveChange, setLiveChange] = useState<LiveChange | null>(null);
-    const isLive = useListUpdates(listId, updatedAt => setLiveChange(pending => mergeLiveChanges(pending, { updatedAt })));
+    const isLive = useListUpdates(listId, version => setLiveChange(pending => mergeLiveChanges(pending, { version })));
 
     useEffect(() => {
         if (!liveChange || isSavingItems) return;
         setLiveChange(null);
         const { queryKey } = groceryListQuery(listId);
-        const cached = queryClient.getQueryData<GroceryListData>(queryKey);
-        const alreadyHasIt = liveChange.updatedAt !== null && !!cached?.updatedAt && cached.updatedAt >= liveChange.updatedAt;
+        const cachedVersion = queryClient.getQueryData<GroceryListData>(queryKey)?.version;
+        // Versions grow in the order changes were stored, so unlike times they can't skip a change saved meanwhile.
+        const alreadyHasIt = liveChange.version !== null && cachedVersion !== undefined && cachedVersion >= liveChange.version;
         if (!alreadyHasIt) {
             queryClient.invalidateQueries({ queryKey });
         }
@@ -621,6 +622,6 @@ function useLiveListRefresh(listId: string, isSavingItems: boolean): boolean {
 
 function mergeLiveChanges(pending: LiveChange | null, change: LiveChange): LiveChange {
     if (!pending) return change;
-    if (pending.updatedAt === null || change.updatedAt === null) return { updatedAt: null };
-    return pending.updatedAt > change.updatedAt ? pending : change;
+    if (pending.version === null || change.version === null) return { version: null };
+    return { version: Math.max(pending.version, change.version) };
 }

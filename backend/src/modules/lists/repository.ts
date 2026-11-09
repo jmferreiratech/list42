@@ -54,18 +54,22 @@ export default class ListsRepository {
             const {Attributes} = await this.ddbDocClient.send(new UpdateCommand({
                 TableName: this.tableName,
                 Key: {id: listId},
-                UpdateExpression: expression.UpdateExpression,
+                // Every saved change also counts up the list's version, which, unlike times set by different
+                // Lambdas, always grows in the order the writes were stored (see src/api/updates).
+                UpdateExpression: `${expression.UpdateExpression} ADD #version :one`,
                 ConditionExpression: expression.ConditionExpression,
                 ExpressionAttributeNames: {
                     '#items': 'items',
                     '#itemId': itemId,
                     '#updatedAt': 'updatedAt',
                     '#updatedBy': 'updatedBy',
+                    '#version': 'version',
                     ...expression.ExpressionAttributeNames,
                 },
                 ExpressionAttributeValues: {
                     ':updatedAt': updatedAt,
                     ':now': new Date().toISOString(),
+                    ':one': 1,
                     ...expression.ExpressionAttributeValues,
                 },
                 ReturnValues: 'ALL_NEW',
@@ -124,6 +128,8 @@ export interface GroceryList {
     createdAt: string;
     updatedAt: string | null;
     updatedBy: string | null;
+    /** Counts the saved changes. Missing until the first one. */
+    version?: number;
 }
 
 export interface GroceryListItem {

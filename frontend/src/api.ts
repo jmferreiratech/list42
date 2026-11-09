@@ -22,6 +22,8 @@ export interface GroceryList {
     items: GroceryItem[];
     createdAt?: string;
     updatedAt?: string | null;
+    /** Counts the saved changes, in the order they were stored. Missing until the first one. */
+    version?: number;
 }
 
 interface GroceryListSummary {

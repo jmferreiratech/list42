@@ -1,7 +1,7 @@
 import type {DynamoDBStreamEvent} from 'aws-lambda';
 
 import logger from '../../logger';
-import {notifyListChanged, verifyUpdatesToken} from '../../modules/updates';
+import {ListChangeNotifier, verifyUpdatesToken} from '../../modules/updates';
 import ConnectionsRepository from '../../modules/updates/repository';
 import settings from '../../settings';
 
@@ -42,24 +42,22 @@ export async function handleConnectionEvent(event: WebSocketEvent): Promise<WebS
 }
 
 // Each write to grocery_lists arrives here through the table's stream. A batch can hold several
-// changes to one list, so each list is notified once, with its newest time.
+// changes to one list, so each list is notified once, with its newest version.
 export async function handleListChanges(event: DynamoDBStreamEvent): Promise<void> {
-    const changes = new Map<string, string>();
+    const changes = new Map<string, number>();
 
     for (const record of event.Records) {
         const list = record.dynamodb?.Keys?.id?.S;
-        // Lists are created empty, without a time, right before their first item is saved. Only that save is worth telling.
-        const updatedAt = record.dynamodb?.NewImage?.updatedAt?.S;
-        if (!list || !updatedAt) {
+        // Lists are created empty, without a version, right before their first item is saved. Only that save is worth telling.
+        const version = Number(record.dynamodb?.NewImage?.version?.N);
+        if (!list || !Number.isFinite(version)) {
             continue;
         }
-        const known = changes.get(list);
-        if (!known || known < updatedAt) {
-            changes.set(list, updatedAt);
-        }
+        changes.set(list, Math.max(version, changes.get(list) ?? 0));
     }
 
     logger.debug('Notifying list changes', {changes: Object.fromEntries(changes)});
 
-    await Promise.all([...changes].map(([list, updatedAt]) => notifyListChanged(settings, list, updatedAt)));
+    const notifier = ListChangeNotifier.config(settings);
+    await Promise.all([...changes].map(([list, version]) => notifier.notify(list, version)));
 }

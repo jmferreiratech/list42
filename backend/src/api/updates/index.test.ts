@@ -42,22 +42,18 @@ describe('list updates', () => {
         const watching = await connect(list);
         await connect(createId());
 
-        await handleListChanges(streamEvent([list, '2026-10-01T10:00:00.000Z']));
+        await handleListChanges(streamEvent([list, 3]));
 
-        expect(posted).toEqual([{ConnectionId: watching, Data: {type: 'listChanged', updatedAt: '2026-10-01T10:00:00.000Z'}}]);
+        expect(posted).toEqual([{ConnectionId: watching, Data: {type: 'listChanged', version: 3}}]);
     });
 
-    it('tells each list once per batch, with its newest change', async () => {
+    it('tells each list once per batch, with its newest version', async () => {
         const list = createId();
         const watching = await connect(list);
 
-        await handleListChanges(streamEvent(
-            [list, '2026-10-01T10:00:00.000Z'],
-            [list, '2026-10-01T12:00:00.000Z'],
-            [list, '2026-10-01T11:00:00.000Z'],
-        ));
+        await handleListChanges(streamEvent([list, 4], [list, 6], [list, 5]));
 
-        expect(posted).toEqual([{ConnectionId: watching, Data: {type: 'listChanged', updatedAt: '2026-10-01T12:00:00.000Z'}}]);
+        expect(posted).toEqual([{ConnectionId: watching, Data: {type: 'listChanged', version: 6}}]);
     });
 
     it('does not tell about a list created empty, before its first item', async () => {
@@ -74,9 +70,21 @@ describe('list updates', () => {
         const connection = await connect(list);
         gone.add(connection);
 
-        await handleListChanges(streamEvent([list, '2026-10-01T10:00:00.000Z']));
+        await handleListChanges(streamEvent([list, 1]));
 
         expect(await connectionsTo(list)).toEqual([]);
+    });
+
+    it('still tells the other connections when forgetting a gone one fails', async () => {
+        const list = createId();
+        const goneConnection = await connect(list);
+        const watching = await connect(list);
+        gone.add(goneConnection);
+        vi.spyOn(ConnectionsRepository.prototype, 'remove').mockRejectedValue(new Error('Throttled'));
+
+        await expect(handleListChanges(streamEvent([list, 2]))).resolves.toBeUndefined();
+
+        expect(posted).toEqual([{ConnectionId: watching, Data: {type: 'listChanged', version: 2}}]);
     });
 
     it('forgets a connection once it closes', async () => {
@@ -120,13 +128,13 @@ describe('list updates', () => {
     }
 });
 
-function streamEvent(...changes: [string, string | null][]): DynamoDBStreamEvent {
+function streamEvent(...changes: [string, number | null][]): DynamoDBStreamEvent {
     return {
-        Records: changes.map(([id, updatedAt]) => ({
+        Records: changes.map(([id, version]) => ({
             eventName: 'MODIFY',
             dynamodb: {
                 Keys: {id: {S: id}},
-                NewImage: {id: {S: id}, updatedAt: updatedAt ? {S: updatedAt} : {NULL: true}},
+                NewImage: version === null ? {id: {S: id}} : {id: {S: id}, version: {N: String(version)}},
             },
         })),
     };

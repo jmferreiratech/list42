@@ -93,13 +93,19 @@ app.use('/api/lists/:listId', async (req, res, next) => {
         }
     }
 
+    next();
+});
+
+// Only the routes that reply with the list load it, after the access check above.
+async function loadList<P extends {listId: string}>(req: express.Request<P>, res: express.Response, next: express.NextFunction) {
+    const {listId} = req.params;
     res.locals.item = await ListsRepository.config(settings)
         .retrieve(listId) ?? {id: listId, items: []};
 
     next();
-});
+}
 
-app.get('/api/lists/:listId', (_req, res) => {
+app.get('/api/lists/:listId', loadList, (_req, res) => {
     const result = res.locals.item as GroceryList;
 
     res.send(publicList(result));
@@ -113,7 +119,7 @@ const GroceryListItemInputSchema = z.object({
     updatedBy: z.string().optional(),
 });
 
-app.post('/api/lists/:listId/items', async (req, res) => {
+app.post('/api/lists/:listId/items', loadList, async (req, res) => {
     const {listId} = req.params;
     const {user} = res.locals.auth as Session;
     const list = res.locals.item as GroceryList;
@@ -129,7 +135,7 @@ app.post('/api/lists/:listId/items', async (req, res) => {
     res.send(publicList(result ?? list));
 });
 
-app.put('/api/lists/:listId/items/:id', async (req, res) => {
+app.put('/api/lists/:listId/items/:id', loadList, async (req, res) => {
     const {listId, id} = req.params;
     const {user} = res.locals.auth as Session;
     const list = res.locals.item as GroceryList;
@@ -151,7 +157,7 @@ const GroceryListItemDeleteSchema = z.object({
     updatedAt: z.string().datetime().optional(),
 }).optional();
 
-app.delete('/api/lists/:listId/items/:id', async (req, res) => {
+app.delete('/api/lists/:listId/items/:id', loadList, async (req, res) => {
     const {listId, id} = req.params;
     const {user} = res.locals.auth as Session;
     const list = res.locals.item as GroceryList;

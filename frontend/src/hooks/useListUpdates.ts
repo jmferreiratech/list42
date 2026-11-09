@@ -9,15 +9,16 @@ const MAX_RETRY_DELAY_MS = 60_000;
 
 interface ListChangedMessage {
     type: 'listChanged';
-    updatedAt: string | null;
+    version: number;
 }
 
 /**
  * Keeps a connection open that tells when the list changes, and reconnects with a growing delay when it drops.
- * `onChange` gets the list's time after the change, or null when changes may have been missed (each time it connects).
+ * `onChange` gets the list's version after the change, or null when changes may have been missed (each time it
+ * connects again after a drop; the first connection follows the list's own fetch).
  * Returns whether the connection is open.
  */
-export default function useListUpdates(listId: string, onChange: (updatedAt: string | null) => void): boolean {
+export default function useListUpdates(listId: string, onChange: (version: number | null) => void): boolean {
     const isOnline = useIsOnline();
     const [isConnected, setIsConnected] = useState(false);
     const onChangeRef = useRef(onChange);
@@ -34,6 +35,7 @@ export default function useListUpdates(listId: string, onChange: (updatedAt: str
         let stopped = false;
         let socket: WebSocket | null = null;
         let retryDelay = FIRST_RETRY_DELAY_MS;
+        let hasConnected = false;
         let retryTimer: ReturnType<typeof setTimeout> | undefined;
         let pingTimer: ReturnType<typeof setInterval> | undefined;
 
@@ -43,30 +45,29 @@ export default function useListUpdates(listId: string, onChange: (updatedAt: str
         };
 
         async function connect() {
-            let url: string;
+            let current: WebSocket;
             try {
                 const ticket = await fetchUpdatesTicket(listId);
-                url = `${ticket.url}?${new URLSearchParams({ token: ticket.token })}`;
+                if (stopped) return;
+                // Throws right away for a URL it can't use.
+                current = new WebSocket(`${ticket.url}?${new URLSearchParams({ token: ticket.token })}`);
             } catch {
                 if (!stopped) retryLater();
                 return;
             }
-            if (stopped) return;
 
-            const current = new WebSocket(url);
             socket = current;
             current.onopen = () => {
                 retryDelay = FIRST_RETRY_DELAY_MS;
                 setIsConnected(true);
                 pingTimer = setInterval(() => current.send(JSON.stringify({ action: 'ping' })), PING_INTERVAL_MS);
                 // Changes made while it was not connected were not told.
-                onChangeRef.current(null);
+                if (hasConnected) onChangeRef.current(null);
+                hasConnected = true;
             };
             current.onmessage = event => {
                 const message = parseMessage(event.data);
-                if (message?.type === 'listChanged') {
-                    onChangeRef.current(message.updatedAt);
-                }
+                if (message) onChangeRef.current(message.version);
             };
             // Also follows a failed attempt, and the server's 2-hour limit per connection.
             current.onclose = () => {
@@ -90,11 +91,17 @@ export default function useListUpdates(listId: string, onChange: (updatedAt: str
     return isConnected;
 }
 
+// Anything but a well-formed change message is ignored.
 function parseMessage(data: unknown): ListChangedMessage | null {
     if (typeof data !== 'string') return null;
+    let message: unknown;
     try {
-        return JSON.parse(data) as ListChangedMessage;
+        message = JSON.parse(data);
     } catch {
         return null;
     }
+    if (typeof message !== 'object' || message === null) return null;
+    const { type, version } = message as Record<string, unknown>;
+    if (type !== 'listChanged' || typeof version !== 'number' || !Number.isFinite(version)) return null;
+    return { type, version };
 }
